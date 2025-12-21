@@ -360,6 +360,8 @@
     </style>
 </head>
 <body class="bg-gray-50">
+    <!-- Global Notification Script -->
+    <script src="/js/notifications.js"></script>
     <!-- Navigation -->
     <nav class="bg-white shadow-lg border-b">
         <div class="container mx-auto px-4">
@@ -2252,7 +2254,7 @@ function resetRequestChangesButton(btn, text, loader) {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ 
                             status: 'published',
-                            publicationLink: publicationLink 
+                            publication_link: publicationLink  // Fixed: use snake_case to match server
                         }),
                         credentials: 'include'
                     });
@@ -2260,7 +2262,7 @@ function resetRequestChangesButton(btn, text, loader) {
                     if (!updateResponse.ok) {
                         console.warn('⚠️ Could not update article status:', await updateResponse.text());
                     } else {
-                        console.log('✅ Article status updated to published');
+                        console.log('✅ Article status updated to published with link:', publicationLink);
                     }
                 } catch (updateError) {
                     console.warn('⚠️ Could not update article status:', updateError);
