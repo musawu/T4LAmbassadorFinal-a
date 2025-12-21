@@ -4159,20 +4159,37 @@ app.get(
   requireRole("admin"),
   async (req, res) => {
     try {
-      const ambassador = await getUserById(req.params.id, "ambassador");
+      const ambassadorId = req.params.id;
       
-      if (!ambassador) {
+      console.log('🔍 Admin fetching ambassador:', ambassadorId);
+
+      // Instead of just getUserById, you need:
+      const { data: ambassador, error } = await supabase
+        .from('ambassadors')
+        .select(`
+          *,
+          users!inner (
+            access_code,
+            email,
+            status
+          )
+        `)
+        .eq('ambassador_id', ambassadorId)
+        .single();
+
+      if (error || !ambassador) {
+        console.error('Error fetching ambassador:', error);
         return res.status(404).json({ error: "Ambassador not found" });
       }
 
-      console.log('📤 Sending ambassador data with access_code:', ambassador.access_code);
+      console.log('📤 Sending ambassador data with access_code:', ambassador.users?.access_code);
 
       return res.json({
-        id: ambassador.id,
-        name: ambassador.first_name || ambassador.name || 'Ambassador',
-        email: ambassador.email,
-        access_code: ambassador.access_code,  // ✅ THIS SHOULD NOW WORK!
-        status: ambassador.status,
+        id: ambassador.ambassador_id,
+        name: ambassador.first_name || 'Ambassador',
+        email: ambassador.users?.email || ambassador.email,
+        access_code: ambassador.users?.access_code,  // ✅ NOW IT WILL WORK!
+        status: ambassador.users?.status || ambassador.status,
         joinDate: ambassador.created_at,
         lastLogin: ambassador.last_login,
         profile: {
@@ -4645,20 +4662,82 @@ app.post(
 // ------------------------
 // Articles APIs
 // ------------------------
+app.get('/admin/api/articles', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const statusFilter = req.query.status;
+    const search = req.query.q;
+    
+    // Always join with ambassadors table
+    let query = supabase
+      .from('articles')
+      .select(`
+        *,
+        ambassadors!inner (
+          first_name,
+          last_name
+        )
+      `, { count: 'exact' });
+
+    // Apply filters
+    if (statusFilter && statusFilter !== 'all') {
+      query = query.eq('status', statusFilter);
+    }
+
+    if (search) {
+      query = query.or(`title.ilike.%${search}%,content.ilike.%${search}%`);
+    }
+
+    query = query.order('created_at', { ascending: false });
+
+    const { data: articles, error, count } = await query;
+
+    if (error) throw error;
+
+    // Format for table
+    const formattedArticles = (articles || []).map(article => {
+      const ambassador = article.ambassadors;
+      const authorName = ambassador 
+        ? `${ambassador.first_name || ''} ${ambassador.last_name || ''}`.trim()
+        : 'Unknown Author';
+
+      return {
+        id: article.article_id,
+        article_id: article.article_id,
+        title: article.title || 'Untitled',
+        authorNameRole: authorName,  // ✅ From ambassadors table
+        companyDescription: article.category || 'General',  // ✅ From article category
+        status: article.status || 'pending',
+        createdAt: article.created_at,
+        date: article.created_at ? new Date(article.created_at).toLocaleDateString() : '-',
+        ambassadorName: authorName
+      };
+    });
+
+    return res.json({
+      items: formattedArticles,
+      total: count || 0
+    });
+
+  } catch (error) {
+    console.error('Error fetching articles:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+// Add to server.js after other admin routes
 app.get(
-  '/admin/api/articles',
+  "/admin-journey-tracker.html",
   requireAuth,
-  requireRole('admin'),
+  requireRole("admin"),
   async (req, res) => {
     try {
-      const statusFilter = req.query.status;
-      const articles = await getArticles(
-        statusFilter && statusFilter !== 'all' ? { status: statusFilter } : {}
-      );
-      return res.json({ articles });
+      const user = await getUserById(req.auth.userId, "admin");
+      if (!user) {
+        return res.redirect("/admin-signin.html");
+      }
+      res.sendFile(path.join(__dirname, "public", "admin-journey-tracker.html"));
     } catch (error) {
-      console.error('Error fetching articles:', error);
-      return res.status(500).json({ error: 'Internal server error' });
+      console.error("Admin journey tracker auth error:", error);
+      return res.redirect("/admin-signin.html");
     }
   }
 );
@@ -4666,73 +4745,79 @@ app.get(
 // ============================================
 // ADMIN: GET SINGLE ARTICLE (REPLACE EXISTING)
 // ============================================
+
 app.get('/admin/api/articles/:id', requireAuth, requireRole('admin'), async (req, res) => {
   try {
     const articleId = req.params.id;
 
-    console.log('📖 Admin fetching article:', articleId);
+    console.log('📖 Fetching article with ambassador info:', articleId);
 
-    // Get article
-    const { data: articles, error } = await supabase
+    // Get article WITH ambassador join
+    const { data: article, error } = await supabase
       .from('articles')
-      .select('*')
-      .eq('article_id', articleId);
+      .select(`
+        *,
+        ambassadors!inner (
+          first_name,
+          last_name,
+          email,
+          user_id,
+          ambassador_id
+        )
+      `)
+      .eq('article_id', articleId)
+      .single();
 
     if (error) {
-      console.error('Error fetching article:', error);
-      throw error;
+      console.error('❌ Database error:', error);
+      return res.status(500).json({ 
+        error: 'Database error', 
+        details: error.message 
+      });
     }
 
-    if (!articles || articles.length === 0) {
+    if (!article) {
+      console.log('❌ Article not found:', articleId);
       return res.status(404).json({ error: 'Article not found' });
     }
 
-    const article = articles[0];
-
-    // Get ambassador info
-    let ambassadorName = 'Unknown';
-    let ambassadorEmail = '-';
+    // Extract ambassador info
+    const ambassador = article.ambassadors;
+    const ambassadorName = ambassador 
+      ? `${ambassador.first_name || ''} ${ambassador.last_name || ''}`.trim() 
+      : 'Unknown Ambassador';
     
-    if (article.ambassador_id) {
-      const { data: ambassador } = await supabase
-        .from('ambassadors')
-        .select('first_name, last_name, email')
-        .eq('ambassador_id', article.ambassador_id)
-        .single();
-      
-      if (ambassador) {
-        ambassadorName = `${ambassador.first_name || ''} ${ambassador.last_name || ''}`.trim();
-        ambassadorEmail = ambassador.email;
-      }
-    }
+    const ambassadorEmail = ambassador?.email || 'unknown@example.com';
+    const ambassadorId = ambassador?.ambassador_id;
 
-    // Return FULL content for admin
-    const responseArticle = {
+    // Build response
+    const response = {
       id: article.article_id,
       article_id: article.article_id,
-      title: article.title,
-      content: article.content,
-      contentHtml: article.content,
-      excerpt: article.excerpt,
-      byline: article.author_name || article.author_role || ambassadorName,
-      authorNameRole: article.author_name || article.author_role || ambassadorName,
-      companyDescription: article.category || '-',
-      status: article.status,
+      ambassador_id: ambassadorId,
+      title: article.title || 'Untitled',
+      content: article.content || '',
+      contentHtml: article.content || '<p>No content</p>',
+      excerpt: article.excerpt || '',
+      authorNameRole: ambassadorName,
+      author_name: ambassadorName,
+      authorEmail: ambassadorEmail,
+      status: article.status || 'pending',
+      publication_link: article.publication_link || null,
+      category: article.category || 'general',
       createdAt: article.created_at,
       updatedAt: article.updated_at,
       views: article.views || 0,
-      likes: article.likes || 0,
-      ambassadorName: ambassadorName,
-      ambassadorEmail: ambassadorEmail
+      likes: article.likes || 0
     };
 
-    console.log('✅ Article sent to admin with full content');
+    console.log('✅ Article sent with ambassador_id:', ambassadorId);
 
-    res.json(responseArticle);
+    return res.json(response);
 
   } catch (error) {
-    console.error('❌ Error fetching article:', error);
-    res.status(500).json({ 
+    console.error('❌ Unexpected error:', error);
+    return res.status(500).json({ 
       error: 'Failed to fetch article',
       details: error.message 
     });
@@ -4802,6 +4887,61 @@ app.put(
     } catch (error) {
       console.error("Error updating article:", error);
       return res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+app.patch(
+  '/admin/api/articles/:id',
+  requireAuth,
+  requireRole('admin'),
+  async (req, res) => {
+    try {
+      const articleId = req.params.id;
+      const { status, publication_link } = req.body;
+
+      console.log('📝 Updating article status:', { articleId, status, publication_link });
+
+      // Check if article exists
+      const { data: existingArticle, error: fetchError } = await supabase
+        .from('articles')
+        .select('*')
+        .eq('article_id', articleId)
+        .single();
+
+      if (fetchError || !existingArticle) {
+        return res.status(404).json({ error: 'Article not found' });
+      }
+
+      const updates = {};
+      if (status) updates.status = status;
+      if (publication_link) updates.publication_link = publication_link;
+      updates.updated_at = new Date().toISOString();
+
+      const { data: updatedArticle, error: updateError } = await supabase
+        .from('articles')
+        .update(updates)
+        .eq('article_id', articleId)
+        .select()
+        .single();
+
+      if (updateError) {
+        console.error('Error updating article:', updateError);
+        throw updateError;
+      }
+
+      console.log('✅ Article updated successfully:', updatedArticle);
+
+      return res.json({
+        success: true,
+        article: updatedArticle,
+        message: `Article status updated to ${status}`
+      });
+    } catch (error) {
+      console.error('❌ Error updating article:', error);
+      return res.status(500).json({ 
+        error: 'Failed to update article status',
+        details: error.message 
+      });
     }
   }
 );
@@ -4891,6 +5031,7 @@ app.get(
         contentHtml: article.content,
         byline: article.excerpt,
         status: article.status,
+        publication_link: article.publication_link,  // ← ADD HERE
         createdAt: article.created_at,
         updatedAt: article.updated_at,
         views: article.views || 0,
@@ -4961,7 +5102,6 @@ app.get(
         console.error('Error fetching ambassador articles:', error);
         throw error;
       }
-
       // Format articles for frontend
       const formattedArticles = (articles || []).map(article => ({
         id: article.article_id,
@@ -4970,6 +5110,7 @@ app.get(
         contentHtml: article.content,
         byline: article.excerpt,
         status: article.status,
+        publication_link: article.publication_link,  // ← ADD HERE
         createdAt: article.created_at,
         updatedAt: article.updated_at,
         views: article.views || 0,
@@ -4994,7 +5135,9 @@ app.get(
   }
 );
 
-// 3. ✅ SINGLE ARTICLE BY ID ROUTE - MUST COME LAST (PARAMETERIZED)
+// ============================================
+// AMBASSADOR: Get single article by ID
+// ============================================
 app.get(
   '/api/ambassador/articles/:id',
   requireAuth,
@@ -5021,7 +5164,7 @@ app.get(
         .from('articles')
         .select('*')
         .eq('article_id', articleId)
-        .eq('ambassador_id', ambassadorId);  // ✅ Use ambassador_id!
+        .eq('ambassador_id', ambassadorId);
 
       if (error) {
         console.error('Error fetching article:', error);
@@ -5034,22 +5177,63 @@ app.get(
 
       const article = articles[0];
 
-      // Get any admin notifications/feedback for this article
-      const { data: notifications } = await supabase
+      // ✅ CRITICAL FIX: Query notifications for THIS SPECIFIC ARTICLE and THIS USER
+      console.log('📬 Fetching notifications for article:', articleId, 'user:', userId);
+      
+      const { data: notifications, error: notifError } = await supabase
         .from('notifications')
         .select('*')
-        .eq('article_id', articleId)
-        .eq('recipient_id', userId)
+        .eq('article_id', articleId)  // Filter by article_id
+        .eq('recipient_id', userId)  // Filter by user_id (recipient)
         .order('created_at', { ascending: false });
+
+      if (notifError) {
+        console.error('⚠️ Error fetching notifications:', notifError);
+        // Don't fail the whole request
+      }
+
+      console.log('✅ Found', notifications?.length || 0, 'notifications for this article and user');
+      
+      // ✅ DEBUG LOG: Show notification details
+      if (notifications && notifications.length > 0) {
+        notifications.forEach(notif => {
+          console.log('  📧 Notification:', {
+            id: notif.notification_id,
+            type: notif.type,
+            message: notif.message?.substring(0, 50) + '...',
+            recipient_id: notif.recipient_id,
+            article_id: notif.article_id
+          });
+        });
+      } else {
+        console.log('  ⚠️ No notifications found');
+        
+        // Debug query to see ALL notifications for this article
+        const { data: allArticleNotifs } = await supabase
+          .from('notifications')
+          .select('*')
+          .eq('article_id', articleId);
+        
+        console.log(`  🔍 Total notifications for article ${articleId}:`, allArticleNotifs?.length || 0);
+        
+        if (allArticleNotifs && allArticleNotifs.length > 0) {
+          console.log('  🔍 Notifications found but not for current user:');
+          allArticleNotifs.forEach(notif => {
+            console.log('    - recipient_id:', notif.recipient_id, 'user_id:', userId, 'match:', notif.recipient_id === userId);
+          });
+        }
+      }
 
       // Format response
       const formattedArticle = {
         id: article.article_id,
         article_id: article.article_id,
+        ambassador_id: article.ambassador_id,
         title: article.title,
         contentHtml: article.content,
         byline: article.excerpt,
         status: article.status,
+        publication_link: article.publication_link,
         createdAt: article.created_at,
         updatedAt: article.updated_at,
         views: article.views || 0,
@@ -5064,8 +5248,6 @@ app.get(
         read: notif.read
       }));
 
-      console.log('✅ Article sent to ambassador:', formattedArticle.title);
-
       return res.json({
         article: formattedArticle,
         notifications: formattedNotifications
@@ -5076,6 +5258,105 @@ app.get(
         error: 'Failed to fetch article',
         details: error.message 
       });
+    }
+  }
+);
+app.get('/api/debug/notifications-check', requireAuth, async (req, res) => {
+  try {
+    const userId = req.auth.userId;
+    const articleId = req.query.articleId;
+    
+    console.log('🔍 DEBUG NOTIFICATIONS CHECK:');
+    console.log('  User ID:', userId);
+    console.log('  Article ID:', articleId);
+
+    // Get user's role
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('user_type')
+      .eq('user_id', userId)
+      .single();
+
+    console.log('  User type:', user?.user_type);
+
+    // Check all notifications for this article
+    const { data: allNotifications } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('article_id', articleId);
+
+    console.log('  Total notifications for article:', allNotifications?.length || 0);
+    
+    if (allNotifications && allNotifications.length > 0) {
+      console.log('  All notifications:');
+      allNotifications.forEach(notif => {
+        console.log(`    - ID: ${notif.notification_id}`);
+        console.log(`      Type: ${notif.type}`);
+        console.log(`      Recipient ID: ${notif.recipient_id} (matches user: ${notif.recipient_id === userId})`);
+        console.log(`      Recipient Type: ${notif.recipient_type} (matches user type: ${notif.recipient_type === user?.user_type})`);
+        console.log(`      Message: ${notif.message?.substring(0, 50)}...`);
+        console.log(`      Created: ${notif.created_at}`);
+      });
+    }
+
+    // Check notifications for this specific user
+    const { data: userNotifications } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('article_id', articleId)
+      .eq('recipient_id', userId);
+
+    console.log('  User-specific notifications:', userNotifications?.length || 0);
+
+    return res.json({
+      userId,
+      articleId,
+      userType: user?.user_type,
+      allNotifications: allNotifications || [],
+      userNotifications: userNotifications || [],
+      totalAll: allNotifications?.length || 0,
+      totalUser: userNotifications?.length || 0
+    });
+  } catch (error) {
+    console.error('Debug error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// ✅ ALSO ADD: Debug endpoint to check notifications
+// ============================================
+app.get(
+  '/api/debug/article-notifications/:articleId',
+  requireAuth,
+  async (req, res) => {
+    try {
+      const articleId = req.params.articleId;
+      const userId = req.auth.userId;
+
+      // Get all notifications for this article
+      const { data: allNotifications } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('article_id', articleId);
+
+      // Get notifications for current user
+      const { data: userNotifications } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('article_id', articleId)
+        .eq('recipient_id', userId);
+
+      return res.json({
+        articleId,
+        currentUserId: userId,
+        totalNotifications: allNotifications?.length || 0,
+        userNotifications: userNotifications?.length || 0,
+        allNotifications: allNotifications || [],
+        userNotificationsData: userNotifications || []
+      });
+    } catch (error) {
+      return res.status(500).json({ error: error.message });
     }
   }
 );
@@ -5207,86 +5488,112 @@ app.post(
   }
 );
 app.post('/admin/api/notifications', requireAuth, requireRole('admin'), async (req, res) => {
-  try {
-    const { articleId, type, message } = req.body;
-    const adminUserId = req.auth.userId;
+    try {
+        const { articleId, type, message, ambassadorId } = req.body;
+        const adminUserId = req.auth.userId;
 
-    console.log('📤 Creating notification:', { articleId, type });
+        console.log('📤 Creating admin notification:', { 
+            articleId, 
+            type, 
+            hasAmbassadorId: !!ambassadorId,
+            adminUserId 
+        });
 
-    // Get article to find the ambassador
-    const { data: article, error: articleError } = await supabase
-      .from('articles')
-      .select('ambassador_id')
-      .eq('article_id', articleId)
-      .single();
+        // Get article details if not provided
+        let targetArticleId = articleId;
+        let targetAmbassadorId = ambassadorId;
+        
+        if (articleId && !ambassadorId) {
+            // Fetch article to get ambassador ID
+            const { data: article, error: articleError } = await supabase
+                .from('articles')
+                .select('ambassador_id')
+                .eq('article_id', articleId)
+                .single();
 
-    if (articleError || !article) {
-      return res.status(404).json({ error: 'Article not found' });
+            if (articleError || !article) {
+                return res.status(404).json({ error: 'Article not found' });
+            }
+            targetAmbassadorId = article.ambassador_id;
+        }
+
+        if (!targetAmbassadorId) {
+            return res.status(400).json({ error: 'Ambassador ID is required' });
+        }
+
+        console.log('🔍 Getting ambassador user_id for:', targetAmbassadorId);
+
+        // Get ambassador's user_id
+        const { data: ambassador, error: ambassadorError } = await supabase
+            .from('ambassadors')
+            .select('user_id, first_name, last_name, email')
+            .eq('ambassador_id', targetAmbassadorId)
+            .single();
+
+        if (ambassadorError || !ambassador) {
+            console.error('❌ Ambassador not found:', targetAmbassadorId);
+            return res.status(404).json({ error: 'Ambassador not found' });
+        }
+
+        console.log('✅ Found ambassador:', {
+            user_id: ambassador.user_id,
+            name: `${ambassador.first_name} ${ambassador.last_name}`,
+            email: ambassador.email
+        });
+
+        // Get admin info
+        const admin = await getUserById(adminUserId, 'admin');
+        const adminName = admin ? (admin.first_name || admin.name || 'Admin') : 'Admin';
+
+        // Create notification
+        const notificationData = {
+            notification_id: uuidv4(),
+            recipient_id: ambassador.user_id, // ✅ CRITICAL: Use ambassador's user_id
+            recipient_type: 'ambassador',
+            type: type || 'needs_update',
+            title: '📝 Article Feedback',
+            message: message || 'Your article needs some updates.',
+            link: `/ambassador-review.html?articleId=${targetArticleId || ''}`,
+            article_id: targetArticleId,
+            read: false,
+            created_at: new Date().toISOString()
+        };
+
+        console.log('📝 Creating notification with data:', notificationData);
+
+        const { data: notification, error: notificationError } = await supabase
+            .from('notifications')
+            .insert([notificationData])
+            .select()
+            .single();
+
+        if (notificationError) {
+            console.error('❌ Error creating notification:', notificationError);
+            throw notificationError;
+        }
+
+        console.log('✅ Notification created successfully:', notification.notification_id);
+
+        return res.json({
+            success: true,
+            notification,
+            message: 'Notification sent successfully'
+        });
+    } catch (error) {
+        console.error('❌ Error creating notification:', error);
+        return res.status(500).json({ 
+            error: 'Failed to send notification',
+            details: error.message 
+        });
     }
-
-    // Get ambassador's user_id
-    const { data: ambassador } = await supabase
-      .from('ambassadors')
-      .select('user_id, first_name, last_name, email')
-      .eq('ambassador_id', article.ambassador_id)
-      .single();
-
-    if (!ambassador) {
-      return res.status(404).json({ error: 'Ambassador not found' });
-    }
-
-    // Get admin info
-    const admin = await getUserById(adminUserId, 'admin');
-    const adminName = admin ? (admin.first_name || admin.name || 'Admin') : 'Admin';
-
-    // Create notification
-    const notificationData = {
-      notification_id: uuidv4(),
-      recipient_id: ambassador.user_id,  // ✅ Use ambassador's user_id
-      recipient_type: 'ambassador',
-      type: type || 'article_feedback',
-      title: type === 'needs_update' ? '📝 Article Update Requested' : '💬 Article Feedback',
-      message: message,
-      link: `/article-progress.html`,
-      article_id: articleId,
-      read: false,
-      created_at: new Date().toISOString()
-    };
-
-    const { data: notification, error } = await supabase
-      .from('notifications')
-      .insert([notificationData])
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error creating notification:', error);
-      throw error;
-    }
-
-    // Update article status if needed
-    if (type === 'needs_update') {
-      await supabase
-        .from('articles')
-        .update({ status: 'needs_update' })
-        .eq('article_id', articleId);
-    }
-
-    console.log('✅ Notification created successfully');
-
-    return res.json({
-      success: true,
-      notification,
-      message: 'Notification sent successfully'
-    });
-  } catch (error) {
-    console.error('❌ Error creating notification:', error);
-    return res.status(500).json({ 
-      error: 'Failed to send notification',
-      details: error.message 
-    });
-  }
 });
+
+// Helper function to extract URL from message
+function extractPublicationLink(message) {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const matches = message.match(urlRegex);
+  return matches ? matches[0] : null;
+}
 
 app.patch(
   "/api/ambassador/articles/:id",

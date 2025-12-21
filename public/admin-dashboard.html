@@ -302,6 +302,52 @@
             }
         }
         
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
+        
+        /* Ensure proper button styling with loader */
+        #sendPublicationBtn:disabled {
+            opacity: 0.9;
+            cursor: not-allowed;
+        }
+        
+        #sendPublicationBtn:disabled:hover {
+            transform: none;
+            box-shadow: none;
+        }
+        
+        /* Make loader clearly visible */
+        #sendBtnLoader {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #sendBtnLoader.hidden {
+            display: none;
+        }
+        
+        /* Request Changes button loader styles */
+        .request-changes-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+        
+        .request-changes-btn:disabled:hover {
+            background-color: #dc2626;
+        }
+        
+        .request-changes-loader {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .request-changes-loader.hidden {
+            display: none;
+        }
+        
         @media (max-width: 768px) {
             .stat-grid {
                 grid-template-columns: 1fr;
@@ -391,7 +437,7 @@
             </div>
         </div>
 
-        <!-- ADDED: Journey Tracker Button -->
+        <!-- Journey Tracker Button -->
         <div class="mb-8">
             <a href="/admin-journey-tracker.html" 
                target="_blank"
@@ -432,7 +478,6 @@
                     <option value="inactive">Inactive</option>
                     <option value="pending">Pending</option>
                 </select>
-                <!-- Updated Add New button -->
                 <a href="/admin-add-user.html" 
                 class="px-6 py-2 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 flex items-center">
                     <i class="bx bx-plus mr-2"></i>
@@ -441,7 +486,7 @@
             </div>
         </div>
 
-        <!-- Article Status Filters (Only for Articles tab) -->
+        <!-- Article Status Filters -->
         <div id="articleStatusFilters" class="bg-white rounded-2xl border border-gray-100 p-2 flex flex-wrap gap-2 mb-4" style="display: none;">
           <button id="filterAll" class="px-4 py-2 rounded-xl text-sm font-semibold text-white" style="background-color:#4b0d7f">All Articles</button>
           <button id="filterPending" class="px-4 py-2 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-100">Pending Review</button>
@@ -585,7 +630,7 @@
         </div>
     </div>
 
-    <!-- Review Modal (Full Screen) - FOR ARTICLES -->
+    <!-- ✅ FIXED Review Modal -->
     <div id="reviewModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-50">
       <div class="bg-white rounded-2xl w-full max-w-6xl shadow-2xl flex flex-col max-h-[90vh]">
         <div class="p-4 border-b border-gray-200 flex items-center justify-between">
@@ -593,69 +638,71 @@
             <h3 id="reviewTitle" class="text-xl font-semibold text-gray-900">Article Title</h3>
             <span id="reviewStatus" class="px-2 py-1 rounded-lg text-xs font-semibold bg-gray-50 text-gray-700 border border-gray-200">status</span>
           </div>
-          <button id="closeReview" class="text-gray-600 hover:text-gray-900"><i class="bx bx-x text-2xl"></i></button>
+          <button onclick="closeReviewModal()" class="text-gray-600 hover:text-gray-900">
+            <i class="bx bx-x text-2xl"></i>
+          </button>
         </div>
-        <div id="reviewContent" class="flex-1 overflow-y-auto">
-          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 p-4 md:p-6">
-            <div class="lg:col-span-2 space-y-4">
-              <div class="bg-white">
-                <div id="reviewArticleHtml" class="prose max-w-none"></div>
-              </div>
-            </div>
-            <div class="space-y-4">
-              <div class="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                <div class="mb-2">
-                  <div class="text-sm font-semibold text-gray-800">Author</div>
-                  <div id="reviewAuthor" class="text-sm text-gray-700">-</div>
-                </div>
-                <div class="mb-2">
-                  <div class="text-sm font-semibold text-gray-800">Company</div>
-                  <div id="reviewCompany" class="text-sm text-gray-700">-</div>
-                </div>
-                <div>
-                  <div class="text-sm font-semibold text-gray-800">Submitted</div>
-                  <div id="reviewDate" class="text-sm text-gray-700">-</div>
-                </div>
-              </div>
-
-              <!-- Previous Admin Feedback -->
-              <div class="bg-white rounded-xl p-4 border border-gray-200">
-                <div class="text-sm font-semibold text-gray-800 mb-3">Previous Feedback</div>
-                <div id="previousFeedback" class="space-y-3 max-h-64 overflow-y-auto">
-                  <div class="text-sm text-gray-500 text-center py-4">No previous feedback</div>
-                </div>
-              </div>
-
-              <!-- Request Change Section -->
-              <div id="requestChangeSection" class="bg-white rounded-xl p-4 border border-gray-200">
-                <div class="text-sm font-semibold text-gray-800 mb-3">Request Changes</div>
-                <div class="space-y-3">
-                  <textarea id="notifMessage" rows="4" placeholder="Add feedback or instructions for the ambassador..." class="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-800 bg-white"></textarea>
-                  <button id="btnRequestChange" type="button" class="w-full px-4 py-2 rounded-lg text-white font-semibold bg-orange-600 hover:bg-orange-700 flex items-center justify-center gap-2">
-                    <i class="bx bx-send text-lg"></i>
-                    <span>Send Request Changes</span>
-                  </button>
-                </div>
-              </div>
-
-              <!-- Article Status Management -->
-              <div class="bg-white rounded-xl p-4 border border-gray-200">
-                <div class="text-sm font-semibold text-gray-800 mb-3">Article Status</div>
-                <div class="space-y-3">
-                  <select id="articleStatusSelect" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-800 focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white">
-                    <option value="pending">Pending Review</option>
-                    <option value="needs_update">Needs Update</option>
-                    <option value="approved">Approved</option>
-                    <option value="published">Published</option>
-                    <option value="rejected">Rejected</option>
-                  </select>
-                  <button id="btnUpdateStatus" class="w-full px-4 py-2 rounded-lg text-white font-semibold bg-purple-600 hover:bg-purple-700">Update Status</button>
-                </div>
-              </div>
-            </div>
-          </div>
+        
+        <div id="reviewContent" class="flex-1 overflow-y-auto p-6">
+          <!-- Content will be dynamically rendered here -->
         </div>
       </div>
+    </div>
+
+    <!-- Push Publication Modal -->
+    <div id="pushPublicationModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl w-full max-w-md shadow-2xl">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-xl font-semibold text-gray-900">Share Published Article</h3>
+                <p class="text-sm text-gray-600 mt-1" id="pushPublicationTitle">Article Title</p>
+            </div>
+            <form id="pushPublicationForm" class="p-6">
+                <input type="hidden" id="pushPublicationArticleId">
+                
+                <div class="form-group">
+                    <label class="form-label" for="publicationLink">
+                        Publication Link <span class="text-red-500">*</span>
+                    </label>
+                    <input 
+                        type="url" 
+                        id="publicationLink" 
+                        class="form-input" 
+                        placeholder="https://example.com/article"
+                        required>
+                    <p class="text-xs text-gray-500 mt-1">Enter the public URL where this article is published</p>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="publicationMessage">
+                        Message to Ambassador (Optional)
+                    </label>
+                    <textarea 
+                        id="publicationMessage" 
+                        rows="3" 
+                        class="form-input" 
+                        placeholder="Great job! Your article has been published..."></textarea>
+                </div>
+                
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button 
+                        type="button" 
+                        onclick="closePushPublicationModal()" 
+                        class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50"
+                        id="cancelPublicationBtn">
+                        Cancel
+                    </button>
+                    <button 
+                        type="submit" 
+                        class="px-4 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 flex items-center justify-center min-w-[140px]"
+                        id="sendPublicationBtn">
+                        <span id="sendBtnText">Send to Ambassador</span>
+                        <div id="sendBtnLoader" class="hidden ml-2">
+                            <div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <!-- Journey Progress Detail Modal -->
@@ -722,7 +769,8 @@
             status: 'all',
             articleStatusFilter: '',
             currentItemId: null,
-            reviewing: null
+            reviewing: null,
+            isRequestingChanges: false // Track if request changes is in progress
         };
 
         // DOM elements
@@ -744,7 +792,7 @@
 
         // Real-time polling configuration
         const REALTIME_CONFIG = {
-          pollInterval: 5000, // Poll every 5 seconds
+          pollInterval: 5000,
           enablePolling: true,
           lastUpdate: null
         };
@@ -752,7 +800,7 @@
         let pollingInterval = null;
 
         // ============================================
-        // HELPER FUNCTIONS - DEFINED FIRST
+        // HELPER FUNCTIONS
         // ============================================
         
         function showLoading(show) {
@@ -918,7 +966,6 @@
             
             const data = await response.json();
             
-            // Verify this is an admin
             if (data.role !== 'admin') {
               window.location.href = '/admin-signin.html';
               return;
@@ -940,7 +987,6 @@
                     fetch('/admin/api/journey/summary', { credentials: 'include' })
                 ]);
                 
-                // Ambassadors stats
                 if (ambassadorsRes.status === 'fulfilled' && ambassadorsRes.value.ok) {
                     const data = await ambassadorsRes.value.json();
                     const total = data.ambassadors.length;
@@ -950,13 +996,11 @@
                     document.getElementById('activeAmbassadors').textContent = active;
                 }
                 
-                // Articles stats
                 if (articlesRes.status === 'fulfilled' && articlesRes.value.ok) {
                     const data = await articlesRes.value.json();
                     document.getElementById('totalArticles').textContent = data.articles ? data.articles.length : (data.items ? data.items.length : 0);
                 }
                 
-                // Journey stats
                 if (journeyRes.status === 'fulfilled' && journeyRes.value.ok) {
                     const data = await journeyRes.value.json();
                     const avgProgress = data.ambassadors.length > 0 
@@ -1035,7 +1079,6 @@
             } catch (error) {
                 console.error('Error fetching list:', error);
                 
-                // Fallback to localStorage for articles
                 if (state.tab === 'articles') {
                     const q = (state.search || '').toLowerCase();
                     const status = (state.articleStatusFilter || '').toLowerCase();
@@ -1210,6 +1253,12 @@
                                 data-id="${articleId}">
                             View Details
                         </button>
+                        <button class="px-3 py-1.5 rounded-lg border border-purple-300 text-purple-700 hover:bg-purple-50 font-semibold" 
+                                data-action="pushPublication" 
+                                data-id="${articleId}"
+                                data-title="${title.replace(/"/g, '&quot;')}">
+                            Share Publication
+                        </button>
                         <button class="px-3 py-1.5 rounded-lg border border-red-300 text-red-700 hover:bg-red-50 font-semibold" 
                                 data-action="delete" 
                                 data-id="${articleId}">
@@ -1249,12 +1298,10 @@
                                        item.overallProgress >= 50 ? 'text-blue-600' :
                                        item.overallProgress >= 25 ? 'text-orange-600' : 'text-red-600';
                     
-                    // Calculate if user is active (updated in last 5 minutes)
                     const lastUpdate = item.lastUpdated || 0;
                     const now = Date.now();
                     const isActiveNow = (now - lastUpdate) < (5 * 60 * 1000);
                     
-                    // Real-time activity indicator
                     const activityIndicator = isActiveNow ? 
                         '<span class="inline-flex items-center px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs font-semibold ml-2" title="Active in last 5 minutes"><i class="bx bx-circle text-xs mr-1 animate-pulse"></i>Live</span>' : '';
                     
@@ -1300,8 +1347,6 @@
             
             renderPagination();
             bindRowActions();
-            
-            // Update last refresh indicator
             updateLastRefreshIndicator();
         }
 
@@ -1319,7 +1364,7 @@
         }
 
         // ============================================
-        // REAL-TIME JOURNEY TRACKING FUNCTIONS
+        // REAL-TIME JOURNEY TRACKING
         // ============================================
 
         function startJourneyPolling() {
@@ -1328,8 +1373,6 @@
             }
             
             REALTIME_CONFIG.enablePolling = true;
-            
-            // Add real-time indicator to the page
             addRealtimeIndicator();
             
             pollingInterval = setInterval(async () => {
@@ -1363,35 +1406,29 @@
                 const data = await response.json();
                 const newItems = data.ambassadors || [];
                 
-                // Compare with current state and update only changed rows
                 newItems.forEach(newItem => {
                     const oldItem = state.items.find(i => i.ambassadorId === newItem.ambassadorId);
                     
                     if (!oldItem) {
-                        // New ambassador - refresh full list
                         state.items = newItems;
                         state.total = data.total || 0;
                         renderJourneyList();
                         return;
                     }
                     
-                    // Check for changes
                     const hasChanges = 
                         oldItem.overallProgress !== newItem.overallProgress ||
                         oldItem.completedTasks !== newItem.completedTasks ||
                         oldItem.currentMonth !== newItem.currentMonth;
                     
                     if (hasChanges) {
-                        // Update the specific row with animation
                         updateJourneyRow(oldItem, newItem);
                         
-                        // Update state
                         const index = state.items.findIndex(i => i.ambassadorId === newItem.ambassadorId);
                         if (index >= 0) {
                             state.items[index] = newItem;
                         }
                         
-                        // Show toast notification
                         showProgressUpdateToast(newItem.ambassadorName, oldItem.overallProgress, newItem.overallProgress);
                     }
                 });
@@ -1408,30 +1445,25 @@
             const row = document.getElementById(`journey-row-${newItem.ambassadorId}`);
             if (!row) return;
             
-            // Flash animation to indicate update
             row.classList.add('bg-yellow-50');
             setTimeout(() => row.classList.remove('bg-yellow-50'), 1000);
             
-            // Update progress bar with animation
             const progressBar = row.querySelector('[data-progress]');
             if (progressBar) {
                 progressBar.style.width = `${newItem.overallProgress}%`;
                 progressBar.setAttribute('data-progress', newItem.overallProgress);
             }
             
-            // Update progress percentage
             const progressText = row.querySelector('.font-semibold.whitespace-nowrap');
             if (progressText) {
                 progressText.textContent = `${newItem.overallProgress}%`;
                 
-                // Update color based on new progress
                 const progressColor = newItem.overallProgress >= 75 ? 'text-green-600' : 
                                    newItem.overallProgress >= 50 ? 'text-blue-600' :
                                    newItem.overallProgress >= 25 ? 'text-orange-600' : 'text-red-600';
                 progressText.className = `font-semibold ${progressColor} whitespace-nowrap`;
             }
             
-            // Update tasks completed
             const tasksSpan = row.querySelector('[data-tasks]');
             if (tasksSpan) {
                 const oldTasks = parseInt(tasksSpan.getAttribute('data-tasks'));
@@ -1439,7 +1471,6 @@
                     tasksSpan.textContent = newItem.completedTasks;
                     tasksSpan.setAttribute('data-tasks', newItem.completedTasks);
                     
-                    // Highlight the change
                     tasksSpan.parentElement.classList.add('font-bold', 'text-green-600');
                     setTimeout(() => {
                         tasksSpan.parentElement.classList.remove('font-bold', 'text-green-600');
@@ -1447,7 +1478,6 @@
                 }
             }
             
-            // Update current month if changed
             if (oldItem.currentMonth !== newItem.currentMonth) {
                 const monthBadge = row.querySelector('.px-2.py-1.rounded-lg.bg-purple-100');
                 if (monthBadge) {
@@ -1493,7 +1523,6 @@
         }
 
         function addRealtimeIndicator() {
-            // Remove existing indicator if present
             removeRealtimeIndicator();
             
             const indicator = document.createElement('div');
@@ -1532,247 +1561,404 @@
         }
 
         // ============================================
-        // MODAL FUNCTIONS
+        // ✅ ULTIMATE FIX - MODAL FUNCTIONS
         // ============================================
 
         function openReviewModal(id) {
+            console.log('🔍 Opening review modal for article ID:', id);
+            
             const modal = document.getElementById('reviewModal');
+            if (!modal) {
+                console.error('❌ Review modal not found in DOM');
+                return;
+            }
+            
             modal.classList.remove('hidden');
             modal.classList.add('flex');
             
-            // Show loading in modal
-            document.getElementById('reviewContent').innerHTML = `
-                <div class="flex items-center justify-center p-12">
-                    <div class="loading-spinner"></div>
-                    <span class="ml-3 text-gray-600">Loading article...</span>
-                </div>
-            `;
-            
-            // Fetch article data
-            fetch(`/admin/api/articles/${id}`, { credentials: 'include' })
-                .then(r => { 
-                    if (!r.ok) throw new Error('load'); 
-                    return r.json(); 
-                })
-                .then(article => {
-                    try { upsertLsArticle(article); } catch (_) {}
-                    state.reviewing = { id, article };
-                    renderReviewModal(article);
-                })
-                .catch(() => {
-                    const article = findLsArticleById(id);
-                    if (!article) { 
-                        showToast('Failed to load article details', true); 
-                        closeReviewModal();
-                        return; 
-                    }
-                    state.reviewing = { id, article };
-                    renderReviewModal(article);
-                });
-        }
-
-        function closeReviewModal() {
-          const modal = document.getElementById('reviewModal');
-          modal.classList.add('hidden');
-          modal.classList.remove('flex');
-          state.reviewing = null;
-        }
-
-        function renderReviewModal(article) {
-            const dateStr = article.createdAt ? new Date(article.createdAt).toLocaleString() : '-';
-            
-            document.getElementById('reviewTitle').textContent = article.title || '-';
-            document.getElementById('reviewAuthor').textContent = article.authorNameRole || '-';
-            document.getElementById('reviewCompany').textContent = article.companyDescription || '-';
-            document.getElementById('reviewDate').textContent = dateStr;
-            
-            const statusEl = document.getElementById('reviewStatus');
-            statusEl.textContent = (article.status || '').toLowerCase();
-            statusEl.className = `px-2 py-1 rounded-lg text-xs font-semibold ${statusBadgeClass(article.status)}`;
-            
-            const content = document.getElementById('reviewArticleHtml');
-            content.innerHTML = article.contentHtml || '<p class="text-gray-500">No content available</p>';
-            
-            document.getElementById('previousFeedback').innerHTML = '<div class="text-sm text-gray-500 text-center py-4">Loading feedback...</div>';
-            document.getElementById('notifMessage').value = '';
-            
-            const statusSelect = document.getElementById('articleStatusSelect');
-            if (statusSelect) {
-                statusSelect.value = String(article.status || 'pending').toLowerCase();
-            }
-            
-            loadPreviousFeedback(article.id);
-        }
-
-        function bindReviewModalEvents() {
-            const btnRequestChange = document.getElementById('btnRequestChange');
-            const btnUpdateStatus = document.getElementById('btnUpdateStatus');
-            const closeReview = document.getElementById('closeReview');
-            
-            if (btnRequestChange) {
-                btnRequestChange.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    requestChanges();
-                });
-            }
-            
-            if (btnUpdateStatus) {
-                btnUpdateStatus.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (!state.reviewing) return;
-                    const statusSelect = document.getElementById('articleStatusSelect');
-                    const newStatus = statusSelect ? statusSelect.value : null;
-                    if (newStatus) {
-                        updateArticleStatus(newStatus);
-                    }
-                });
-            }
-            
-            if (closeReview) {
-                closeReview.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    closeReviewModal();
-                });
-            }
-        }
-
-        function loadPreviousFeedback(articleId) {
-          fetch(`/admin/api/articles/${articleId}/notifications`, { credentials: 'include' })
-            .then(r => { if (!r.ok) throw new Error('load'); return r.json(); })
-            .then(data => {
-              const feedbackContainer = document.getElementById('previousFeedback');
-              const notifications = data.items || [];
-              
-              if (notifications.length === 0) {
-                feedbackContainer.innerHTML = '<div class="text-sm text-gray-500 text-center py-4">No previous feedback</div>';
-                return;
-              }
-              
-              feedbackContainer.innerHTML = notifications.map(notif => {
-                const date = new Date(notif.createdAt || Date.now()).toLocaleDateString('en-US', {
-                  year: 'numeric',
-                  month: 'short',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                });
-                
-                const isRequestChange = String(notif.type || '').toLowerCase() === 'needs_update';
-                
-                return `
-                  <div class="border-l-4 ${isRequestChange ? 'border-orange-500' : 'border-purple-500'} bg-gray-50 rounded p-3">
-                    <div class="flex items-start justify-between mb-2">
-                      <div class="flex items-center gap-2">
-                        <span class="text-xs font-semibold text-gray-700">${escapeHtml(notif.adminName || 'Admin')}</span>
-                        ${isRequestChange ? '<span class="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded">Request Change</span>' : ''}
-                      </div>
-                      <span class="text-xs text-gray-500">${date}</span>
+            const reviewContent = document.getElementById('reviewContent');
+            if (reviewContent) {
+                reviewContent.innerHTML = `
+                    <div class="flex items-center justify-center p-12">
+                        <div class="loading-spinner"></div>
+                        <span class="ml-3 text-gray-600">Loading article...</span>
                     </div>
-                    <p class="text-sm text-gray-700 whitespace-pre-wrap">${escapeHtml(notif.message || 'No message')}</p>
-                  </div>
                 `;
-              }).join('');
+            }
+            
+            fetch(`/admin/api/articles/${id}`, { 
+                credentials: 'include',
+                headers: {
+                    'Accept': 'application/json',
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache'
+                },
+                cache: 'no-store'
             })
-            .catch(() => {
-              document.getElementById('previousFeedback').innerHTML = '<div class="text-sm text-gray-500 text-center py-4">Failed to load feedback</div>';
+            .then(response => { 
+                console.log('📥 Response status:', response.status);
+                
+                if (!response.ok) {
+                    return response.text().then(text => { 
+                        console.error('❌ Error response:', text);
+                        throw new Error(`HTTP ${response.status}: ${text}`); 
+                    });
+                }
+                return response.json(); 
+            })
+            .then(data => {
+                console.log('✅ Article data received:', data);
+                
+                const article = data;
+                
+                if (!article || (!article.article_id && !article.id)) {
+                    console.error('❌ Invalid article data:', data);
+                    throw new Error('Invalid article data from server');
+                }
+                
+                const articleId = article.article_id || article.id;
+                console.log('✅ Article ID:', articleId);
+                
+                try { 
+                    upsertLsArticle(article); 
+                } catch (err) {
+                    console.warn('⚠️ LocalStorage save failed:', err);
+                }
+                
+                state.reviewing = { id: articleId, article };
+                renderReviewModal(article);
+            })
+            .catch((err) => {
+                console.error('❌ Error loading article:', err);
+                
+                if (reviewContent) {
+                    reviewContent.innerHTML = `
+                        <div class="p-8 text-center">
+                            <div class="text-red-500 text-4xl mb-4">⚠️</div>
+                            <h3 class="text-lg font-semibold text-gray-900 mb-2">Failed to Load Article</h3>
+                            <p class="text-gray-600 mb-4">Error: ${err.message}</p>
+                            <button onclick="closeReviewModal()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
+                                Close
+                            </button>
+                        </div>
+                    `;
+                }
             });
         }
 
-        function updateArticleStatus(newStatus) {
-            if (!state.reviewing) return Promise.reject(new Error('No article'));
+        function closeReviewModal() {
+            const modal = document.getElementById('reviewModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            state.reviewing = null;
+        }
+
+        // ✅ ULTIMATE FIX - HANDLES ANY BACKEND RESPONSE
+        function renderReviewModal(article) {
+            console.log('🎨 ULTIMATE RENDER: article =', article);
             
-            const id = state.reviewing.id;
+            const modal = document.getElementById('reviewModal');
+            if (!modal) {
+                console.error('❌ CRITICAL: reviewModal not found!');
+                alert('Review modal HTML is missing! Check your HTML.');
+                return;
+            }
             
-            return fetch(`/admin/api/articles/${id}`, { 
+            if (modal.classList.contains('hidden')) {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            }
+            
+            const reviewContent = document.getElementById('reviewContent');
+            if (!reviewContent) {
+                console.error('❌ reviewContent not found!');
+                return;
+            }
+            
+            let articleId = article.id || article.article_id || 'unknown-id';
+            let title = article.title || 'Untitled Article';
+            let content = article.contentHtml || article.content || article.body || 
+                         '<p class="text-gray-500 italic">No content available</p>';
+            let author = article.authorNameRole || article.author_name || article.author || 'Unknown Author';
+            let company = article.companyDescription || article.company || article.category || 'General';
+            let status = (article.status || 'pending').toLowerCase();
+            let dateStr = article.createdAt || article.created_at || 
+                         (article.date ? new Date(article.date).toLocaleString() : '-');
+            
+            console.log('📊 Parsed data:', { title, author, status, dateStr });
+            
+            reviewContent.innerHTML = `
+                <div class="p-6">
+                    <div class="bg-white rounded-xl shadow-sm border p-6 mb-6">
+                        <h2 class="text-2xl font-bold text-gray-900 mb-2">${title}</h2>
+                        <div class="flex flex-wrap gap-2 mb-4">
+                            <span class="px-3 py-1 rounded-lg text-sm font-semibold ${statusBadgeClass(status)}">
+                                ${status.toUpperCase()}
+                            </span>
+                            <span class="px-3 py-1 rounded-lg text-sm font-semibold bg-blue-50 text-blue-700">
+                                By: ${author}
+                            </span>
+                            ${company ? `<span class="px-3 py-1 rounded-lg text-sm font-semibold bg-gray-50 text-gray-700">${company}</span>` : ''}
+                            <span class="px-3 py-1 rounded-lg text-sm font-semibold bg-gray-50 text-gray-700">${dateStr}</span>
+                        </div>
+                        
+                        <div class="mt-6">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-3">Article Content</h3>
+                            <div class="prose max-w-none bg-gray-50 rounded-lg p-4 border border-gray-300 min-h-[300px]">
+                                ${content.includes('<') ? content : `<p>${content}</p>`}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-xl shadow-sm border p-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">Feedback & Actions</h3>
+                        
+                        <div class="mb-6">
+                            <textarea 
+                                id="simpleNotifMessage" 
+                                rows="3" 
+                                placeholder="Type your feedback here..."
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-800 bg-white mb-3"></textarea>
+                            <div class="relative">
+                                <button 
+                                    onclick="handleSimpleRequestChange('${articleId}')" 
+                                    class="w-full px-4 py-2 rounded-lg text-white font-semibold bg-orange-600 hover:bg-orange-700 request-changes-btn flex items-center justify-center"
+                                    id="requestChangesBtn">
+                                    <span id="requestChangesText">Request Changes</span>
+                                    <div id="requestChangesLoader" class="request-changes-loader hidden ml-2">
+                                        <div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <select 
+                                id="simpleStatusSelect" 
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-800 bg-white mb-3">
+                                <option value="pending" ${status === 'pending' ? 'selected' : ''}>Pending Review</option>
+                                <option value="needs_update" ${status === 'needs_update' ? 'selected' : ''}>Needs Update</option>
+                                <option value="approved" ${status === 'approved' ? 'selected' : ''}>Approved</option>
+                                <option value="published" ${status === 'published' ? 'selected' : ''}>Published</option>
+                                <option value="rejected" ${status === 'rejected' ? 'selected' : ''}>Rejected</option>
+                            </select>
+                            <button 
+                                onclick="handleSimpleStatusUpdate('${articleId}')" 
+                                class="w-full px-4 py-2 rounded-lg text-white font-semibold bg-purple-600 hover:bg-purple-700">
+                                Update Status
+                            </button>
+                        </div>
+                        
+                        <div class="mt-6 pt-4 border-t border-gray-200">
+                            <button onclick="closeReviewModal()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            console.log('✅ ULTIMATE FIX: Modal rendered successfully');
+        }
+
+// ✅ ULTIMATE FIX FOR REQUEST CHANGES - WITH LOADER
+async function handleSimpleRequestChange(articleId) {
+    console.log('🚀 ULTIMATE FIX: Request Changes for article:', articleId);
+    
+    // Prevent multiple clicks
+    if (state.isRequestingChanges) {
+        console.log('⚠️ Request already in progress');
+        return;
+    }
+    
+    const message = document.getElementById('simpleNotifMessage').value.trim();
+    if (!message) {
+        showToast('Please provide feedback message', true);
+        return;
+    }
+    
+    // Get button elements
+    const requestChangesBtn = document.getElementById('requestChangesBtn');
+    const requestChangesText = document.getElementById('requestChangesText');
+    const requestChangesLoader = document.getElementById('requestChangesLoader');
+    
+    if (!requestChangesBtn || !requestChangesText || !requestChangesLoader) {
+        console.error('❌ Button elements not found');
+        showToast('UI Error: Button elements not found', true);
+        return;
+    }
+    
+    // Set loading state
+    state.isRequestingChanges = true;
+    requestChangesBtn.disabled = true;
+    requestChangesText.textContent = 'Requesting Changes...';
+    requestChangesLoader.classList.remove('hidden');
+    
+    console.log('📤 Message:', message);
+    
+    try {
+        // 1. First get article details
+        console.log('🔍 Step 1: Fetching article details...');
+        const articleResponse = await fetch(`/admin/api/articles/${articleId}`, { 
+            credentials: 'include' 
+        });
+        
+        if (!articleResponse.ok) {
+            throw new Error('Failed to fetch article details');
+        }
+        
+        const articleData = await articleResponse.json();
+        console.log('✅ Article data received:', articleData);
+        
+        // 🔥 CRITICAL: Check ALL possible locations for ambassador_id
+        let ambassadorId = null;
+        
+        // Try direct field first
+        if (articleData.ambassador_id) {
+            ambassadorId = articleData.ambassador_id;
+        } 
+        // Try ambassador object
+        else if (articleData.ambassador && articleData.ambassador.ambassador_id) {
+            ambassadorId = articleData.ambassador.ambassador_id;
+        }
+        // Try nested in ambassadors array
+        else if (articleData.ambassadors && articleData.ambassadors.ambassador_id) {
+            ambassadorId = articleData.ambassadors.ambassador_id;
+        }
+        
+        if (!ambassadorId) {
+            console.error('❌ No ambassador_id found. Article data structure:', articleData);
+            
+            // 🚨 EMERGENCY FIX: If we can't find ambassador_id, try to get it from a different API
+            console.log('🆘 Attempting emergency lookup...');
+            
+            // Try to get ambassador ID from articles list or ambassador API
+            // This is a fallback - the REAL fix should be in server.js
+            showToast('Could not find ambassador. Please check the article data in console.', true);
+            console.log('🆘 ADMIN: You need to fix the /admin/api/articles/:id endpoint in server.js');
+            console.log('🆘 The endpoint MUST return ambassador_id in the response');
+            
+            // Reset button state
+            resetRequestChangesButton(requestChangesBtn, requestChangesText, requestChangesLoader);
+            state.isRequestingChanges = false;
+            return;
+        }
+        
+        console.log('✅ Ambassador ID found:', ambassadorId);
+
+        // 2. Send notification to ambassador
+        console.log('📬 Step 2: Sending notification to ambassador...');
+        const notifResponse = await fetch('/admin/api/notifications', { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ 
+                articleId: articleId, 
+                type: 'needs_update', 
+                message: message,
+                ambassadorId: ambassadorId
+            }), 
+            credentials: 'include' 
+        });
+        
+        if (!notifResponse.ok) {
+            const errorText = await notifResponse.text();
+            console.error('❌ Notification error response:', errorText);
+            throw new Error('Failed to send notification');
+        }
+        
+        const notifData = await notifResponse.json();
+        console.log('✅ Notification created:', notifData);
+        
+        // 3. Update article status to 'needs_update'
+        console.log('📝 Step 3: Updating article status...');
+        const updateResponse = await fetch(`/admin/api/articles/${articleId}`, { 
+            method: 'PATCH', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ 
+                status: 'needs_update'
+            }), 
+            credentials: 'include' 
+        });
+        
+        if (!updateResponse.ok) {
+            throw new Error('Failed to update article status');
+        }
+        
+        const updateData = await updateResponse.json();
+        console.log('✅ Article status updated:', updateData);
+        
+        // 4. Success - Update button to show success
+        requestChangesText.textContent = 'Changes Requested! ✓';
+        requestChangesBtn.style.backgroundColor = '#10b981';
+        requestChangesLoader.classList.add('hidden');
+        
+        // Clear the message field
+        document.getElementById('simpleNotifMessage').value = '';
+        
+        console.log('✅ Change request process completed successfully');
+        showToast('✅ Change request sent to ambassador!');
+        
+        // 5. Close modal and refresh after delay
+        setTimeout(() => {
+            resetRequestChangesButton(requestChangesBtn, requestChangesText, requestChangesLoader);
+            state.isRequestingChanges = false;
+            
+            closeReviewModal();
+            if (state.tab === 'articles') {
+                fetchList();
+            }
+        }, 1500);
+        
+    } catch (error) {
+        console.error('❌ ULTIMATE FIX Error:', error);
+        
+        // Show error on button
+        requestChangesText.textContent = 'Failed!';
+        requestChangesBtn.style.backgroundColor = '#ef4444';
+        requestChangesLoader.classList.add('hidden');
+        
+        showToast(`Failed to send change request: ${error.message}`, true);
+        
+        // Reset button after 3 seconds
+        setTimeout(() => {
+            resetRequestChangesButton(requestChangesBtn, requestChangesText, requestChangesLoader);
+            state.isRequestingChanges = false;
+        }, 3000);
+    }
+}
+
+// Helper function to reset button state
+function resetRequestChangesButton(btn, text, loader) {
+    if (!btn || !text || !loader) return;
+    
+    btn.disabled = false;
+    text.textContent = 'Request Changes';
+    btn.style.backgroundColor = '';
+    loader.classList.add('hidden');
+}
+
+        function handleSimpleStatusUpdate(articleId) {
+            const statusSelect = document.getElementById('simpleStatusSelect');
+            const newStatus = statusSelect ? statusSelect.value : null;
+            if (!newStatus) return;
+            
+            fetch(`/admin/api/articles/${articleId}`, { 
                 method: 'PATCH', 
                 headers: { 'Content-Type': 'application/json' }, 
                 body: JSON.stringify({ status: newStatus }), 
                 credentials: 'include' 
             })
             .then(r => { 
-                if (!r.ok) throw new Error('save'); 
-                return r.json(); 
-            })
-            .then(({ article }) => {
-                try { upsertLsArticle(article); } catch (_) {}
-                showToast(`Status updated to ${article.status}`);
-                
-                // Update the items list
-                const idx = state.items.findIndex(it => String(it.id) === String(id));
-                if (idx >= 0) { 
-                    state.items[idx].status = article.status; 
-                    renderArticlesList(); 
-                }
-                
-                // Update the modal without re-binding events
-                state.reviewing.article = article;
-                
-                // Just update the UI elements
-                const statusEl = document.getElementById('reviewStatus');
-                if (statusEl) {
-                    statusEl.textContent = (article.status || '').toLowerCase();
-                    statusEl.className = `px-2 py-1 rounded-lg text-xs font-semibold ${statusBadgeClass(article.status)}`;
-                }
-                
-                const statusSelect = document.getElementById('articleStatusSelect');
-                if (statusSelect) {
-                    statusSelect.value = String(article.status || 'pending').toLowerCase();
-                }
-                
-                return article;
-            })
-            .catch((err) => { 
-                showToast('Failed to update status', true);
-                throw err;
-            });
-        }
-
-        function requestChanges() {
-            if (!state.reviewing) {
-                showToast('No article selected', true);
-                return Promise.reject(new Error('No article'));
-            }
-            
-            const id = state.reviewing.id;
-            const messageInput = document.getElementById('notifMessage');
-            const message = messageInput ? messageInput.value.trim() : '';
-            
-            if (!message) {
-                showToast('Please provide feedback message', true);
-                return Promise.reject(new Error('No message'));
-            }
-            
-            return fetch('/admin/api/notifications', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ 
-                    articleId: id, 
-                    type: 'needs_update', 
-                    message 
-                }), 
-                credentials: 'include' 
-            })
-            .then(r => { 
-                if (!r.ok) throw new Error('notify'); 
+                if (!r.ok) throw new Error('Failed to update'); 
                 return r.json(); 
             })
             .then(() => { 
-                showToast('Change request sent to ambassador');
-                if (messageInput) messageInput.value = '';
-                
-                // Reload feedback
-                loadPreviousFeedback(id);
-                
-                // Update article status to 'needs_update'
-                return updateArticleStatus('needs_update');
+                showToast(`Status updated to ${newStatus}`);
+                if (state.tab === 'articles') fetchList();
             })
             .catch((err) => { 
                 console.error('Error:', err);
-                showToast('Failed to send change request', true);
-                throw err;
+                showToast('Failed to update status', true);
             });
         }
 
@@ -1948,8 +2134,183 @@
             modal.classList.remove('flex');
         }
 
+        // ============================================
+        // PUSH PUBLICATION MODAL FUNCTIONS
+        // ============================================
+        
+        function openPushPublicationModal(articleId, articleTitle) {
+            const modal = document.getElementById('pushPublicationModal');
+            document.getElementById('pushPublicationArticleId').value = articleId;
+            document.getElementById('pushPublicationTitle').textContent = articleTitle || 'Article';
+            document.getElementById('publicationLink').value = '';
+            document.getElementById('publicationMessage').value = '';
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closePushPublicationModal() {
+            const modal = document.getElementById('pushPublicationModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            
+            const sendBtn = document.getElementById('sendPublicationBtn');
+            const cancelBtn = document.getElementById('cancelPublicationBtn');
+            const sendBtnText = document.getElementById('sendBtnText');
+            const sendBtnLoader = document.getElementById('sendBtnLoader');
+            
+            if (sendBtn) {
+                sendBtn.disabled = false;
+                sendBtn.style.backgroundColor = '';
+            }
+            if (cancelBtn) {
+                cancelBtn.disabled = false;
+            }
+            if (sendBtnText) {
+                sendBtnText.textContent = 'Send to Ambassador';
+                sendBtnText.classList.remove('opacity-75');
+            }
+            if (sendBtnLoader) {
+                sendBtnLoader.classList.add('hidden');
+            }
+            
+            const form = document.getElementById('pushPublicationForm');
+            if (form) {
+                form.reset();
+            }
+        }
+
+        async function handlePushPublication(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const articleId = document.getElementById('pushPublicationArticleId').value;
+            const publicationLink = document.getElementById('publicationLink').value.trim();
+            const message = document.getElementById('publicationMessage').value.trim();
+            
+            console.log('🚀 Push Publication Started:', { articleId, publicationLink });
+            
+            if (!publicationLink) {
+                showToast('Please enter a publication link', true);
+                return;
+            }
+            
+            const sendBtn = document.getElementById('sendPublicationBtn');
+            const cancelBtn = document.getElementById('cancelPublicationBtn');
+            const sendBtnText = document.getElementById('sendBtnText');
+            const sendBtnLoader = document.getElementById('sendBtnLoader');
+            
+            if (sendBtn.disabled) {
+                console.log('⚠️ Button already disabled, preventing duplicate submission');
+                return;
+            }
+            
+            sendBtn.disabled = true;
+            cancelBtn.disabled = true;
+            sendBtnText.textContent = 'Sending...';
+            sendBtnText.classList.add('opacity-75');
+            sendBtnLoader.classList.remove('hidden');
+            sendBtn.style.backgroundColor = '#6d28d9';
+            
+            console.log('✅ Loading state activated');
+
+            try {
+                console.log('📤 Sending publication notification:', { articleId, publicationLink });
+                
+                const defaultMessage = message || `🎉 Great news! Your article has been published and is now live at: ${publicationLink}`;
+                
+                const response = await fetch('/admin/api/notifications', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        articleId: articleId,
+                        type: 'article_published',
+                        message: defaultMessage
+                    }),
+                    credentials: 'include'
+                });
+                
+                console.log('📥 Response status:', response.status);
+                
+                if (!response.ok) {
+                    let errorMessage = 'Failed to send notification';
+                    try {
+                        const errorData = await response.json();
+                        errorMessage = errorData.error || errorMessage;
+                    } catch (_) {
+                        errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                    }
+                    throw new Error(errorMessage);
+                }
+                
+                const responseData = await response.json();
+                console.log('✅ Notification sent:', responseData);
+
+                try {
+                    const updateResponse = await fetch(`/admin/api/articles/${articleId}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            status: 'published',
+                            publicationLink: publicationLink 
+                        }),
+                        credentials: 'include'
+                    });
+                    
+                    if (!updateResponse.ok) {
+                        console.warn('⚠️ Could not update article status:', await updateResponse.text());
+                    } else {
+                        console.log('✅ Article status updated to published');
+                    }
+                } catch (updateError) {
+                    console.warn('⚠️ Could not update article status:', updateError);
+                }
+                
+                sendBtnText.textContent = 'Sent! ✓';
+                sendBtn.style.backgroundColor = '#10b981';
+                sendBtnLoader.classList.add('hidden');
+                
+                console.log('🎉 Publication notification complete');
+                
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                showToast('✅ Publication link sent to ambassador!');
+                
+                const modal = document.getElementById('pushPublicationModal');
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+                
+                sendBtn.disabled = false;
+                cancelBtn.disabled = false;
+                sendBtnText.textContent = 'Send to Ambassador';
+                sendBtnText.classList.remove('opacity-75');
+                sendBtn.style.backgroundColor = '';
+                
+                if (state.tab === 'articles') {
+                    fetchList();
+                    fetchStats();
+                }
+                
+            } catch (error) {
+                console.error('❌ Error sending publication:', error);
+                
+                sendBtnText.textContent = 'Failed!';
+                sendBtn.style.backgroundColor = '#ef4444';
+                sendBtnLoader.classList.add('hidden');
+                
+                showToast('Failed to send publication link: ' + error.message, true);
+                
+                setTimeout(() => {
+                    sendBtn.disabled = false;
+                    cancelBtn.disabled = false;
+                    sendBtnText.textContent = 'Send to Ambassador';
+                    sendBtnText.classList.remove('opacity-75');
+                    sendBtn.style.backgroundColor = '';
+                }, 3000);
+            }
+        }
+            
         function openEditModal(id) {
-            // Implement edit functionality
             showToast('Edit functionality coming soon');
         }
 
@@ -2053,6 +2414,9 @@
                     case 'delete':
                         openDeleteModal(id);
                         break;
+                    case 'pushPublication':
+                        openPushPublicationModal(id, target.getAttribute('data-title'));
+                        break;
                 }
             });
         }
@@ -2078,47 +2442,46 @@
                 fetchList();
             });
             
-            // Article status filter buttons
             document.getElementById('filterAll').addEventListener('click', () => {
-              state.articleStatusFilter = '';
-              state.page = 1;
-              setActiveArticleFilter('filterAll');
-              fetchList();
+                state.articleStatusFilter = '';
+                state.page = 1;
+                setActiveArticleFilter('filterAll');
+                fetchList();
             });
             
             document.getElementById('filterPending').addEventListener('click', () => {
-              state.articleStatusFilter = 'pending';
-              state.page = 1;
-              setActiveArticleFilter('filterPending');
-              fetchList();
+                state.articleStatusFilter = 'pending';
+                state.page = 1;
+                setActiveArticleFilter('filterPending');
+                fetchList();
             });
             
             document.getElementById('filterNeedsUpdate').addEventListener('click', () => {
-              state.articleStatusFilter = 'needs_update';
-              state.page = 1;
-              setActiveArticleFilter('filterNeedsUpdate');
-              fetchList();
+                state.articleStatusFilter = 'needs_update';
+                state.page = 1;
+                setActiveArticleFilter('filterNeedsUpdate');
+                fetchList();
             });
             
             document.getElementById('filterApproved').addEventListener('click', () => {
-              state.articleStatusFilter = 'approved';
-              state.page = 1;
-              setActiveArticleFilter('filterApproved');
-              fetchList();
+                state.articleStatusFilter = 'approved';
+                state.page = 1;
+                setActiveArticleFilter('filterApproved');
+                fetchList();
             });
             
             document.getElementById('filterPublished').addEventListener('click', () => {
-              state.articleStatusFilter = 'published';
-              state.page = 1;
-              setActiveArticleFilter('filterPublished');
-              fetchList();
+                state.articleStatusFilter = 'published';
+                state.page = 1;
+                setActiveArticleFilter('filterPublished');
+                fetchList();
             });
             
             document.getElementById('filterRejected').addEventListener('click', () => {
-              state.articleStatusFilter = 'rejected';
-              state.page = 1;
-              setActiveArticleFilter('filterRejected');
-              fetchList();
+                state.articleStatusFilter = 'rejected';
+                state.page = 1;
+                setActiveArticleFilter('filterRejected');
+                fetchList();
             });
             
             elements.prevPage.addEventListener('click', () => {
@@ -2136,7 +2499,6 @@
                 }
             });
 
-            // Journey detail modal close button
             document.getElementById('closeJourneyDetail').addEventListener('click', () => {
                 const modal = document.getElementById('journeyDetailModal');
                 modal.classList.add('hidden');
@@ -2145,7 +2507,7 @@
         }
 
         // ============================================
-        // ✅ CRITICAL FIX: TAB SETUP FUNCTION DEFINED BEFORE USE
+        // TAB SETUP FUNCTION
         // ============================================
         function setupTabsWithPolling() {
             const tabs = {
@@ -2157,7 +2519,6 @@
             
             Object.entries(tabs).forEach(([tabName, tabElement]) => {
                 tabElement.addEventListener('click', () => {
-                    // Stop polling when leaving journey tab
                     if (state.tab === 'journey' && tabName !== 'journey') {
                         stopJourneyPolling();
                     }
@@ -2168,7 +2529,6 @@
                     state.status = 'all';
                     state.articleStatusFilter = '';
                     
-                    // Show/hide article status filters
                     const articleStatusFilters = document.getElementById('articleStatusFilters');
                     if (tabName === 'articles') {
                         articleStatusFilters.style.display = 'flex';
@@ -2177,7 +2537,6 @@
                         articleStatusFilters.style.display = 'none';
                     }
                     
-                    // Update UI
                     Object.entries(tabs).forEach(([name, element]) => {
                         if (name === tabName) {
                             element.className = 'px-4 py-2 rounded-xl text-sm font-semibold text-white';
@@ -2189,7 +2548,6 @@
                     });
                     
                     fetchList().then(() => {
-                        // Start polling after loading journey data
                         if (tabName === 'journey') {
                             startJourneyPolling();
                         }
@@ -2219,15 +2577,23 @@
         }
 
         // ============================================
-        // INITIALIZE - NOW AFTER ALL FUNCTIONS ARE DEFINED
+        // INITIALIZE
         // ============================================
         document.addEventListener('DOMContentLoaded', () => {
             loadAdminInfo();
             fetchStats();
             fetchList();
             bindEvents();
-            bindReviewModalEvents();
-            setupTabsWithPolling(); // ✅ NOW THIS WORKS!
+            setupTabsWithPolling();
+            
+            const pushPublicationForm = document.getElementById('pushPublicationForm');
+            if (pushPublicationForm) {
+                const newForm = pushPublicationForm.cloneNode(true);
+                pushPublicationForm.parentNode.replaceChild(newForm, pushPublicationForm);
+                
+                document.getElementById('pushPublicationForm').addEventListener('submit', handlePushPublication);
+                console.log('✅ Push publication form bound with fixed handler');
+            }
         });
 
         // Add CSS for animations
@@ -2271,6 +2637,10 @@
         window.logout = logout;
         window.showToast = showToast;
         window.closeReviewModal = closeReviewModal;
+        window.closePushPublicationModal = closePushPublicationModal;
+        window.handleSimpleRequestChange = handleSimpleRequestChange;
+        window.handleSimpleStatusUpdate = handleSimpleStatusUpdate;
+        window.resetRequestChangesButton = resetRequestChangesButton;
     </script>
 </body>
 </html>

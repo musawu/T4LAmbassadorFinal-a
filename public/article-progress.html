@@ -765,43 +765,57 @@
 
         // Load published articles
         async function loadPublishedArticles() {
-            try {
-                const response = await fetch('/api/ambassador/articles?limit=50', {
-                    credentials: 'include'
-                });
+        try {
+            const response = await fetch('/api/ambassador/articles?limit=50', {
+            credentials: 'include'
+            });
 
-                if (!response.ok) throw new Error('Failed to load articles');
+            if (!response.ok) throw new Error('Failed to load articles');
 
-                const data = await response.json();
-                const publishedArticles = data.items.filter(a => a.status === 'published');
+            const data = await response.json();
+            const publishedArticles = data.items.filter(a => a.status === 'published');
 
-                const container = document.getElementById('publishedArticlesList');
+            const container = document.getElementById('publishedArticlesList');
 
-                if (publishedArticles.length === 0) {
-                    container.innerHTML = `
-                        <div class="empty-state">
-                            <i class="bx bx-file"></i>
-                            <p>No published articles yet</p>
-                        </div>
-                    `;
-                    return;
-                }
-
-                container.innerHTML = publishedArticles.map(article => `
-                    <a href="/ambassador-review.html?articleId=${article.id}" class="article-item">
-                        <h4 class="article-title">${article.title || 'Untitled Article'}</h4>
-                        <div class="article-meta">
-                            <span class="article-badge">Article</span>
-                            <span class="article-date">${formatDate(article.createdAt)}</span>
-                        </div>
-                    </a>
-                `).join('');
-
-            } catch (error) {
-                console.error('Error loading published articles:', error);
+            if (publishedArticles.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                <i class="bx bx-file"></i>
+                <p>No published articles yet</p>
+                </div>
+            `;
+            return;
             }
-        }
 
+            container.innerHTML = publishedArticles.map(article => {
+            const hasLink = article.publication_link || article.publicationLink;
+            
+            return `
+                <div class="article-item">
+                <h4 class="article-title">${article.title || 'Untitled Article'}</h4>
+                ${hasLink ? `
+                    <div class="mt-2 mb-3">
+                    <a href="${article.publication_link || article.publicationLink}" 
+                        target="_blank" 
+                        class="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium">
+                        <i class="bx bx-link-external"></i>
+                        View Published Article
+                    </a>
+                    </div>
+                ` : ''}
+                <div class="article-meta">
+                    <span class="article-badge">Published Article</span>
+                    <span class="article-date">${formatDate(article.createdAt)}</span>
+                </div>
+                </div>
+            `;
+            }).join('');
+
+        } catch (error) {
+            console.error('Error loading published articles:', error);
+        }
+    }
+                
         // Load article progress
         async function loadArticleProgress() {
             let articleId = getArticleIdFromUrl();
@@ -823,13 +837,38 @@
                 return;
             }
 
+            console.log('🔍 Attempting to load article:', articleId);
+
             try {
+                // First, check if article exists
+                try {
+                    const debugResponse = await fetch(`/api/debug/article-notifications/${articleId}`, {
+                        credentials: 'include'
+                    });
+                    if (debugResponse.ok) {
+                        const debugData = await debugResponse.json();
+                        console.log('🔍 DEBUG - Article check:', debugData);
+                        
+                        if (debugData.totalNotifications === 0 && !debugData.userNotifications) {
+                            console.log('⚠️ Article might not exist or you have no notifications for it');
+                        }
+                    }
+                } catch (debugError) {
+                    console.log('⚠️ Debug endpoint not available:', debugError.message);
+                }
+
                 const response = await fetch(`/api/ambassador/articles/${articleId}`, {
                     credentials: 'include'
                 });
 
+                console.log('📊 API Response status:', response.status);
+                
                 if (!response.ok) {
-                    throw new Error('Failed to load article');
+                    if (response.status === 404) {
+                        throw new Error('Article not found or you do not have permission to view it');
+                    } else {
+                        throw new Error('Failed to load article');
+                    }
                 }
 
                 const data = await response.json();
@@ -857,11 +896,17 @@
                 showToast('Failed to load article progress', true);
                 document.getElementById('loadingState').innerHTML = `
                     <i class="bx bx-error-circle text-6xl text-red-500 mb-4"></i>
-                    <p class="text-gray-600">Failed to load article. Please try again.</p>
-                    <button onclick="location.reload()" class="btn btn-primary mt-4">
-                        <i class="bx bx-refresh"></i>
-                        Retry
-                    </button>
+                    <p class="text-gray-600">${error.message}</p>
+                    <div class="mt-4 space-y-2">
+                        <button onclick="location.reload()" class="btn btn-primary">
+                            <i class="bx bx-refresh"></i>
+                            Retry
+                        </button>
+                        <a href="/article-amb.html" class="btn btn-secondary block">
+                            <i class="bx bx-arrow-back"></i>
+                            Back to Articles
+                        </a>
+                    </div>
                 `;
             }
         }

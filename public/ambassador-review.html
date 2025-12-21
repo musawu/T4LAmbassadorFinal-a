@@ -536,88 +536,104 @@
       // ==========================================
       // ARTICLE LOADING (WITH INLINE LOADING STATE)
       // ==========================================
-      
-      async function loadArticle() {
-        // ✅ SHOW LOADING STATE IN CONTENT AREA
-        showLoadingState();
+// ✅ CRITICAL FIX: Update loadArticle to ensure notifications are fetched
+async function loadArticle() {
+    showLoadingState();
 
-        let articleId = null;
-        let source = 'url';
-        const urlParams = new URLSearchParams(window.location.search);
-        articleId = urlParams.get('articleId');
+    let articleId = null;
+    let source = 'url';
+    const urlParams = new URLSearchParams(window.location.search);
+    articleId = urlParams.get('articleId');
 
-        if (!articleId) {
-          articleId = localStorage.getItem('lastSubmittedArticleId');
-          source = 'localStorage';
-        }
+    if (!articleId) {
+        articleId = localStorage.getItem('lastSubmittedArticleId');
+        source = 'localStorage';
+    }
 
-        if (!articleId) {
-          articleId = sessionStorage.getItem('currentArticleId');
-          source = 'sessionStorage';
-        }
+    if (!articleId) {
+        articleId = sessionStorage.getItem('currentArticleId');
+        source = 'sessionStorage';
+    }
 
-        // ✅ If still no articleId, fetch the latest article
-        if (!articleId) {
-          console.log('📥 No article ID found, fetching latest article...');
-          try {
+    if (!articleId) {
+        console.log('📥 No article ID found, fetching latest article...');
+        try {
             const response = await fetch('/api/ambassador/articles/latest', {
-              credentials: 'include'
+                credentials: 'include'
             });
 
             if (response.ok) {
-              const data = await response.json();
-              if (data && data.article) {
-                saveArticleToLocalStorage(data.article);
-                showArticleView();
-                displayArticle(data.article, false);
-                displayNotifications(data.notifications || []);
-                // Save the ID for future reference
-                localStorage.setItem('lastSubmittedArticleId', data.article.id);
-                sessionStorage.setItem('currentArticleId', data.article.id);
-                
-                showToast('✅ Article loaded successfully');
-                console.log('✅ Latest article loaded successfully');
-                return;
-              }
+                const data = await response.json();
+                if (data && data.article) {
+                    saveArticleToLocalStorage(data.article);
+                    showArticleView();
+                    displayArticle(data.article, false);
+                    displayNotifications(data.notifications || []);
+                    localStorage.setItem('lastSubmittedArticleId', data.article.id);
+                    sessionStorage.setItem('currentArticleId', data.article.id);
+                    
+                    showToast('✅ Article loaded successfully');
+                    console.log('✅ Latest article loaded successfully');
+                    
+                    // ✅ DEBUG: Check notifications
+                    await debugNotifications(data.article.id);
+                    return;
+                }
             }
             
-            // If no latest article, show article selection
             await loadUserArticlesFallback();
             showError('No articles found. Please submit an article first.');
             return;
-          } catch (error) {
+        } catch (error) {
             console.error('Error fetching latest article:', error);
             await loadUserArticlesFallback();
             return;
-          }
         }
+    }
 
-        showDebugInfo(articleId, source);
+    showDebugInfo(articleId, source);
 
-        try {
-          const response = await fetch(`/api/ambassador/articles/${articleId}`, {
+    try {
+        console.log('📡 Fetching article:', articleId);
+        
+        const response = await fetch(`/api/ambassador/articles/${articleId}`, {
             credentials: 'include'
-          });
+        });
 
-          if (response.ok) {
+        if (response.ok) {
             const data = await response.json();
+            
+            console.log('📦 Received data:', {
+                hasArticle: !!data.article,
+                hasNotifications: !!data.notifications,
+                notificationCount: data.notifications?.length || 0
+            });
+            
             if (!data || !data.article) {
-              throw new Error('Article data missing');
+                throw new Error('Article data missing');
             }
+            
             saveArticleToLocalStorage(data.article);
             showArticleView();
             displayArticle(data.article, false);
+            
+            // ✅ CRITICAL: Display notifications with debug
+            console.log('🔔 About to display notifications:', data.notifications);
             displayNotifications(data.notifications || []);
+            
             localStorage.setItem('lastSubmittedArticleId', articleId);
             sessionStorage.setItem('currentArticleId', articleId);
             
             showToast('✅ Article loaded successfully');
+            
+            // ✅ DEBUG: Verify notifications
+            await debugNotifications(articleId);
             return;
-          }
+        }
 
-          // Try cache if fetch failed
-          const cachedArticle = loadArticleFromLocalStorage(articleId);
-          if (cachedArticle) {
+        // Try cache if fetch failed
+        const cachedArticle = loadArticleFromLocalStorage(articleId);
+        if (cachedArticle) {
             showArticleView();
             displayArticle(cachedArticle, true);
             displayNotifications([]);
@@ -626,29 +642,29 @@
             
             showWarning('Loaded from cache - some features may be limited');
             return;
-          } else {
+        } else {
             showError('Article not found.');
             await loadUserArticlesFallback();
             return;
-          }
-        } catch (error) {
-          console.error('Error loading article:', error);
-          
-          const cachedArticle = loadArticleFromLocalStorage(articleId);
-          if (cachedArticle) {
+        }
+    } catch (error) {
+        console.error('Error loading article:', error);
+        
+        const cachedArticle = loadArticleFromLocalStorage(articleId);
+        if (cachedArticle) {
             showArticleView();
             displayArticle(cachedArticle, true);
             displayNotifications([]);
             showWarning('Loaded from cache');
             return;
-          } else {
+        } else {
             showError('Failed to load article');
             await loadUserArticlesFallback();
             return;
-          }
         }
-      }
-
+    }
+}
+      
       // ==========================================
       // DISPLAY ARTICLE (UPDATED WITH CONDITIONAL EDITOR BUTTON)
       // ==========================================
@@ -793,73 +809,115 @@
       // DISPLAY NOTIFICATIONS
       // ==========================================
       
-      function displayNotifications(notifications) {
-        const container = document.getElementById('adminFeedbackContainer');
-        
-        if (!notifications || notifications.length === 0) {
-          container.innerHTML = `
+function displayNotifications(notifications) {
+    const container = document.getElementById('adminFeedbackContainer');
+    
+    console.log('📬 Displaying notifications:', notifications);
+    
+    if (!notifications || notifications.length === 0) {
+        container.innerHTML = `
             <div class="text-center py-8 text-gray-500">
-              <i class="bx bx-info-circle text-4xl mb-2"></i>
-              <p>No feedback yet. Your article is being reviewed.</p>
+                <i class="bx bx-info-circle text-4xl mb-2"></i>
+                <p>No feedback yet. Your article is being reviewed.</p>
             </div>
-          `;
-          return;
-        }
+        `;
+        return;
+    }
 
-        container.innerHTML = notifications.map(notif => {
-          const date = new Date(notif.createdAt || Date.now()).toLocaleDateString('en-US', {
+    // ✅ FIX: Filter for article-related notifications
+    const articleNotifications = notifications.filter(notif => {
+        const type = (notif.type || '').toLowerCase();
+        return type === 'needs_update' || 
+               type === 'article_feedback' || 
+               type === 'article_published' ||
+               type === 'article_approved';
+    });
+
+    console.log('📝 Article notifications:', articleNotifications);
+
+    if (articleNotifications.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-8 text-gray-500">
+                <i class="bx bx-info-circle text-4xl mb-2"></i>
+                <p>No feedback yet. Your article is being reviewed.</p>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = articleNotifications.map(notif => {
+        const date = new Date(notif.createdAt || Date.now()).toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'short',
             day: 'numeric',
             hour: '2-digit',
             minute: '2-digit'
-          });
-          
-          return `
-            <div class="bg-white rounded-xl p-6 border-l-4 border-purple-600 shadow-sm">
-              <div class="flex items-start justify-between mb-3">
-                <div class="flex items-center gap-2">
-                  <i class="bx bx-message-dots text-xl text-purple-600"></i>
-                  <span class="font-semibold text-gray-900">${escapeHtml(notif.type || 'Feedback')}</span>
-                </div>
-                <span class="text-xs text-gray-500">
-                  ${date}
-                </span>
-              </div>
-              <p class="text-gray-700 whitespace-pre-wrap leading-relaxed">${escapeHtml(notif.message || 'No message')}</p>
-            </div>
-          `;
-        }).join('');
-
-        // Update requested changes list
-        const changes = [];
-        notifications.forEach(notif => {
-          if (notif.message) {
-            notif.message.split('\n').forEach(line => {
-              const t = line.trim();
-              if (/^[-•]/.test(t)) {
-                changes.push(t.replace(/^[-•]\s*/, ''));
-              }
-            });
-          }
         });
-
-        const ul = document.getElementById('changesList');
-        ul.innerHTML = '';
-        if (!changes.length) {
-          const li = document.createElement('li');
-          li.className = 'text-gray-600';
-          li.textContent = 'No specific changes requested.';
-          ul.appendChild(li);
-        } else {
-          changes.forEach(c => {
-            const li = document.createElement('li');
-            li.className = 'flex items-start gap-2';
-            li.innerHTML = `<span class="text-green-600 mt-0.5"><i class="bx bx-check-circle"></i></span><span>${escapeHtml(c)}</span>`;
-            ul.appendChild(li);
-          });
+        
+        // Determine notification style based on type
+        let borderColor = 'border-purple-600';
+        let iconClass = 'bx-message-dots';
+        let iconColor = 'text-purple-600';
+        
+        const type = (notif.type || '').toLowerCase();
+        if (type === 'needs_update') {
+            borderColor = 'border-orange-600';
+            iconClass = 'bx-edit';
+            iconColor = 'text-orange-600';
+        } else if (type === 'article_published') {
+            borderColor = 'border-green-600';
+            iconClass = 'bx-check-circle';
+            iconColor = 'text-green-600';
+        } else if (type === 'article_approved') {
+            borderColor = 'border-blue-600';
+            iconClass = 'bx-like';
+            iconColor = 'text-blue-600';
         }
-      }
+        
+        return `
+            <div class="bg-white rounded-xl p-6 border-l-4 ${borderColor} shadow-sm">
+                <div class="flex items-start justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <i class="bx ${iconClass} text-xl ${iconColor}"></i>
+                        <span class="font-semibold text-gray-900">${escapeHtml(notif.type || 'Feedback')}</span>
+                    </div>
+                    <span class="text-xs text-gray-500">
+                        ${date}
+                    </span>
+                </div>
+                <p class="text-gray-700 whitespace-pre-wrap leading-relaxed">${escapeHtml(notif.message || 'No message')}</p>
+            </div>
+        `;
+    }).join('');
+}
+
+// ✅ ALSO ADD: Debug function to check notifications
+async function debugNotifications(articleId) {
+    try {
+        console.log('🔍 DEBUG: Checking notifications for article:', articleId);
+        
+        const response = await fetch(`/api/ambassador/articles/${articleId}`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            console.log('📦 Full response data:', {
+                article: data.article,
+                notifications: data.notifications,
+                notificationCount: data.notifications?.length || 0
+            });
+            
+            if (data.notifications && data.notifications.length > 0) {
+                console.table(data.notifications);
+            } else {
+                console.log('⚠️ No notifications found in response');
+            }
+        }
+    } catch (error) {
+        console.error('❌ Debug error:', error);
+    }
+}
 
       // ==========================================
       // INITIALIZATION
