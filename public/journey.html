@@ -2854,71 +2854,82 @@ Best,
         setToast(null);
       }, []);
 
-      // localStorage helper functions
-      const getStorageKey = useCallback((userId = 'default') => {
-        return `journey_tasks_${userId}`;
+      // Database helper functions (replaces localStorage)
+      const saveTaskToDatabase = useCallback(async (monthNumber, taskKey, completed) => {
+        try {
+          const response = await fetch('/api/journey/v2/task', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              monthNumber: monthNumber,
+              taskKey: taskKey,
+              completed: completed,
+            }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+            console.error('Failed to save task to database:', errorData);
+            throw new Error(errorData.error || 'Failed to save task to database');
+          }
+          console.log('Task saved to database');
+        } catch (err) {
+          console.error('Failed to save task to database:', err);
+          throw err;
+        }
       }, []);
 
-      const saveTasksToLocalStorage = useCallback((tasks, userId = 'default') => {
+      const loadTasksFromDatabase = useCallback(async () => {
         try {
-          const storageKey = getStorageKey(userId);
-          localStorage.setItem(storageKey, JSON.stringify(tasks));
-          console.log('Tasks saved to localStorage');
-        } catch (err) {
-          console.error('Failed to save tasks to localStorage:', err);
-        }
-      }, [getStorageKey]);
-
-      const loadTasksFromLocalStorage = useCallback((userId = 'default') => {
-        try {
-          const storageKey = getStorageKey(userId);
-          const savedTasks = localStorage.getItem(storageKey);
-          if (savedTasks) {
-            console.log('Tasks loaded from localStorage');
-            return JSON.parse(savedTasks);
+          const response = await fetch('/api/journey/v2/progress');
+          if (!response.ok) {
+            throw new Error('Failed to load tasks from database');
           }
+          const data = await response.json();
+          console.log('Tasks loaded from database');
+          return data.completedTasks || {};
         } catch (err) {
-          console.error('Failed to load tasks from localStorage:', err);
+          console.error('Failed to load tasks from database:', err);
+          return {};
         }
-        return {};
-      }, [getStorageKey]);
+      }, []);
 
-      // Load saved tasks from localStorage when component mounts
+      // Load saved tasks from database when component mounts
       useEffect(() => {
-        // Fetch user info first
-        const fetchUser = async () => {
+        const fetchTasks = async () => {
           try {
-            // In a real app, you would fetch the actual user ID
-            // For now, we'll use a default user ID
-            const userId = 'default';
-            
-            // Load saved tasks from localStorage
-            const savedTasks = loadTasksFromLocalStorage(userId);
+            // Load saved tasks from database
+            const savedTasks = await loadTasksFromDatabase();
             
             if (Object.keys(savedTasks).length > 0) {
               setJourneyData(prev => ({
                 ...prev,
                 completedTasks: savedTasks
               }));
-              console.log('Restored tasks from localStorage:', savedTasks);
+              console.log('Restored tasks from database:', savedTasks);
             }
           } catch (err) {
-            console.error('Failed to load user data:', err);
+            console.error('Failed to load tasks from database:', err);
           }
         };
 
-        fetchUser();
-      }, [loadTasksFromLocalStorage]);
+        fetchTasks();
+      }, [loadTasksFromDatabase]);
 
       const handleToggleTask = useCallback(async (monthIndex, taskId) => {
         try {
           const newCompletedTasks = { ...journeyData.completedTasks };
           const taskKey = `${monthIndex}-${taskId}`;
 
-          if (newCompletedTasks[taskKey]) {
-            delete newCompletedTasks[taskKey];
-          } else {
+          const isCurrentlyCompleted = !!newCompletedTasks[taskKey];
+          const newCompleted = !isCurrentlyCompleted;
+
+          if (newCompleted) {
             newCompletedTasks[taskKey] = true;
+          } else {
+            delete newCompletedTasks[taskKey];
           }
 
           setJourneyData(prev => ({
@@ -2926,11 +2937,10 @@ Best,
             completedTasks: newCompletedTasks
           }));
 
-          // Save to localStorage
-          saveTasksToLocalStorage(newCompletedTasks, 'default');
+          // Save to database
+          await saveTaskToDatabase(monthIndex, taskId, newCompleted);
 
-          const isCompleted = newCompletedTasks[taskKey];
-          showToast(isCompleted ? 'Task completed! ✅' : 'Task unchecked', 'success');
+          showToast(newCompleted ? 'Task completed! ✅' : 'Task unchecked', 'success');
 
           // Check if Month 12 is now fully completed
           if (monthIndex === 12) {
@@ -2947,8 +2957,13 @@ Best,
           }
         } catch (err) {
           showToast('Failed to update task', 'error');
+          // Revert on error
+          setJourneyData(prev => ({
+            ...prev,
+            completedTasks: journeyData.completedTasks
+          }));
         }
-      }, [journeyData.completedTasks, journeyData.months, saveTasksToLocalStorage, showToast]);
+      }, [journeyData.completedTasks, journeyData.months, saveTaskToDatabase, showToast]);
 
       const handleNextMonth = useCallback(async () => {
         const { currentMonth, completedTasks, months } = journeyData;

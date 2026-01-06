@@ -385,6 +385,14 @@ const {
   getJourneyProgress,
   upsertJourneyProgress,
   getAllJourneyProgress,
+  // New journey system functions
+  getJourneyMonths,
+  getJourneyTasksByMonth,
+  getJourneyTaskByKey,
+  getAmbassadorCurrentMonth,
+  upsertAmbassadorMonthProgress,
+  getAmbassadorTaskCompletions,
+  upsertTaskCompletion,
   getArticles,
   getArticleById,
   createArticle,
@@ -4242,6 +4250,250 @@ app.post(
   }
 );
 
+// Update task completion status (new database system)
+app.post(
+  "/api/journey/v2/task",
+  requireAuth,
+  requireRole("ambassador"),
+  async (req, res) => {
+    try {
+      const { monthNumber, taskKey, completed } = req.body;
+      const userId = req.auth.userId;
+
+      if (monthNumber === undefined || !taskKey || completed === undefined) {
+        return res.status(400).json({
+          error: "monthNumber, taskKey, and completed are required",
+        });
+      }
+
+      // Get ambassador_id from user_id
+      const { data: ambassador } = await supabase
+        .from("ambassadors")
+        .select("ambassador_id")
+        .eq("user_id", userId)
+        .single();
+
+      if (!ambassador) {
+        return res.status(404).json({ error: "Ambassador not found" });
+      }
+
+      const ambassadorId = ambassador.ambassador_id;
+
+      // Get the task
+      const task = await getJourneyTaskByKey(monthNumber, taskKey);
+      if (!task) {
+        console.error(
+          `Task not found: monthNumber=${monthNumber}, taskKey=${taskKey}`
+        );
+        return res.status(404).json({
+          error:
+            "Task not found. Please ensure the database tables are created and populated with journey data.",
+        });
+      }
+
+      // Update task completion
+      const status = completed ? "completed" : "not_started";
+      await upsertTaskCompletion(ambassadorId, task.task_id, status);
+
+      // Get updated progress
+      const taskCompletions = await getAmbassadorTaskCompletions(ambassadorId);
+      const completedTasksMap = {};
+      taskCompletions.forEach((completion) => {
+        if (completion.status === "completed") {
+          const mn = completion.journey_tasks?.journey_months?.month_number;
+          const taskName = completion.journey_tasks?.task_name;
+          if (mn && taskName) {
+            const tk = taskName
+              .toLowerCase()
+              .replace(/\s+/g, "_")
+              .replace(/[^a-z0-9_]/g, "");
+            completedTasksMap[`${mn}-${tk}`] = true;
+          }
+        }
+      });
+
+      return res.json({
+        success: true,
+        completedTasks: completedTasksMap,
+        message: completed ? "Task completed! ✅" : "Task unchecked",
+      });
+    } catch (error) {
+      console.error("Error updating task:", error);
+      return res.status(500).json({ error: "Failed to update task" });
+    }
+  }
+);
+
+// Get ambassador's journey progress (new database system)
+app.get(
+  "/api/journey/v2/progress",
+  requireAuth,
+  requireRole("ambassador"),
+  async (req, res) => {
+    try {
+      const userId = req.auth.userId;
+
+      // Get ambassador_id from user_id
+      const { data: ambassador } = await supabase
+        .from("ambassadors")
+        .select("ambassador_id")
+        .eq("user_id", userId)
+        .single();
+
+      if (!ambassador) {
+        return res.status(404).json({ error: "Ambassador not found" });
+      }
+
+      const ambassadorId = ambassador.ambassador_id;
+
+      // Get all months
+      const months = await getJourneyMonths();
+
+      // If no months in database, return empty progress (tables not set up yet)
+      if (!months || months.length === 0) {
+        return res.json({
+          currentMonth: 1,
+          currentMonthTitle: "Month 1",
+          currentMonthMilestone: "",
+          completedTasks: {},
+          statistics: {
+            totalTasks: 0,
+            completedCount: 0,
+            overallProgress: 0,
+            currentMonthProgress: 0,
+          },
+          months: [],
+        });
+      }
+
+      // Get current month
+      let currentMonthProgress = await getAmbassadorCurrentMonth(ambassadorId);
+      let currentMonthNumber =
+        currentMonthProgress?.journey_months?.month_number;
+
+      // If no current month is set, initialize with month 1
+      if (!currentMonthNumber) {
+        const month1 = months.find((m) => m.month_number === 1);
+        if (month1) {
+          await upsertAmbassadorMonthProgress(
+            ambassadorId,
+            month1.month_id,
+            true
+          );
+          currentMonthNumber = 1;
+        } else {
+          currentMonthNumber = 1;
+        }
+      }
+
+      // Get all task completions
+      const taskCompletions = await getAmbassadorTaskCompletions(ambassadorId);
+      const completedTasksMap = {};
+      taskCompletions.forEach((completion) => {
+        if (completion.status === "completed") {
+          const monthNumber =
+            completion.journey_tasks?.journey_months?.month_number;
+          const taskName = completion.journey_tasks?.task_name;
+          // Create a key from task_name (convert to lowercase, replace spaces with underscores)
+          if (monthNumber && taskName) {
+            const taskKey = taskName
+              .toLowerCase()
+              .replace(/\s+/g, "_")
+              .replace(/[^a-z0-9_]/g, "");
+            completedTasksMap[`${monthNumber}-${taskKey}`] = true;
+          }
+        }
+      });
+
+      // Build response with months and their tasks
+      const monthsWithProgress = await Promise.all(
+        months.map(async (month) => {
+          const tasks = await getJourneyTasksByMonth(month.month_id);
+          const monthTaskCompletions = taskCompletions.filter((tc) => {
+            // Match by month_number from the joined journey_months
+            const taskMonthNumber =
+              tc.journey_tasks?.journey_months?.month_number;
+            return taskMonthNumber === month.month_number;
+          });
+          const completedCount = monthTaskCompletions.filter(
+            (tc) => tc.status === "completed"
+          ).length;
+          const progress =
+            tasks.length > 0
+              ? Math.round((completedCount / tasks.length) * 100)
+              : 0;
+
+          return {
+            month: month.month_number,
+            title: month.month_name,
+            milestone: month.subtitle || month.description,
+            totalTasks: tasks.length,
+            completedTasks: completedCount,
+            progress: progress,
+            isCurrentMonth: month.month_number === currentMonthNumber,
+            isCompleted: month.month_number < currentMonthNumber,
+            tasks: tasks.map((task) => {
+              // Create task id from task_name (matching journey-db.js format)
+              const taskId = task.task_name
+                .toLowerCase()
+                .replace(/\s+/g, "_")
+                .replace(/[^a-z0-9_]/g, "");
+              return {
+                id: taskId,
+                text: task.task_name,
+                description: task.task_description,
+                completed:
+                  !!completedTasksMap[`${month.month_number}-${taskId}`],
+                critical: task.is_critical,
+                time: task.estimated_time_minutes
+                  ? `${Math.floor(task.estimated_time_minutes / 60)}h ${
+                      task.estimated_time_minutes % 60
+                    }m`
+                  : "",
+              };
+            }),
+          };
+        })
+      );
+
+      // Calculate overall statistics
+      const totalTasks = monthsWithProgress.reduce(
+        (sum, m) => sum + m.totalTasks,
+        0
+      );
+      const totalCompleted = monthsWithProgress.reduce(
+        (sum, m) => sum + m.completedTasks,
+        0
+      );
+      const overallProgress =
+        totalTasks > 0 ? Math.round((totalCompleted / totalTasks) * 100) : 0;
+
+      const currentMonthData = monthsWithProgress.find(
+        (m) => m.month === currentMonthNumber
+      );
+
+      return res.json({
+        currentMonth: currentMonthNumber,
+        currentMonthTitle: currentMonthData?.title || "Month 1",
+        currentMonthMilestone: currentMonthData?.milestone || "",
+        completedTasks: completedTasksMap,
+        statistics: {
+          totalTasks,
+          completedCount: totalCompleted,
+          overallProgress,
+          currentMonthProgress: currentMonthData?.progress || 0,
+        },
+        months: monthsWithProgress,
+      });
+    } catch (error) {
+      console.error("Error fetching journey progress v2:", error);
+      return res
+        .status(500)
+        .json({ error: "Failed to fetch journey progress" });
+    }
+  }
+);
+
 app.get(
   "/api/journey/days-remaining",
   requireAuth,
@@ -6794,16 +7046,16 @@ app.get("/api/media", requireAuth, async (req, res) => {
   try {
     const userId = req.user.id;
     console.log(`📦 Fetching media for user: ${userId}`);
-    
+
     // Get media from database (stored in memory for now)
-    const userMedia = mediaLibrary.filter(m => m.user_id === userId);
-    
+    const userMedia = mediaLibrary.filter((m) => m.user_id === userId);
+
     // Sort by created_at descending
     userMedia.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    
-    return res.json({ 
+
+    return res.json({
       success: true,
-      media: userMedia 
+      media: userMedia,
     });
   } catch (error) {
     console.error("❌ Error fetching media:", error);
@@ -6816,44 +7068,48 @@ app.post("/api/media", requireAuth, async (req, res) => {
   try {
     const userId = req.user.id;
     const { title, type, url, description } = req.body;
-    
+
     // Validate required fields
     if (!title || !type || !url) {
-      return res.status(400).json({ error: "Missing required fields: title, type, url" });
+      return res
+        .status(400)
+        .json({ error: "Missing required fields: title, type, url" });
     }
-    
+
     // Validate URL format
     try {
       new URL(url);
     } catch (e) {
       return res.status(400).json({ error: "Invalid URL format" });
     }
-    
+
     // Validate type
-    const validTypes = ['canva', 'image', 'video', 'document', 'other'];
+    const validTypes = ["canva", "image", "video", "document", "other"];
     if (!validTypes.includes(type)) {
-      return res.status(400).json({ error: `Invalid media type. Must be one of: ${validTypes.join(', ')}` });
+      return res.status(400).json({
+        error: `Invalid media type. Must be one of: ${validTypes.join(", ")}`,
+      });
     }
-    
+
     const mediaItem = {
       id: uuidv4(),
       user_id: userId,
       title: title.trim(),
       type: type.toLowerCase(),
       url: url.trim(),
-      description: description ? description.trim() : '',
+      description: description ? description.trim() : "",
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     };
-    
+
     // Store in memory (in production, save to database)
     mediaLibrary.push(mediaItem);
-    
+
     console.log(`✅ Media added: ${mediaItem.id}`);
-    
+
     return res.json({
       success: true,
-      media: mediaItem
+      media: mediaItem,
     });
   } catch (error) {
     console.error("❌ Error adding media:", error);
@@ -6866,22 +7122,24 @@ app.delete("/api/media/:id", requireAuth, async (req, res) => {
   try {
     const userId = req.user.id;
     const mediaId = req.params.id;
-    
+
     // Find and remove media
-    const mediaIndex = mediaLibrary.findIndex(m => m.id === mediaId && m.user_id === userId);
-    
+    const mediaIndex = mediaLibrary.findIndex(
+      (m) => m.id === mediaId && m.user_id === userId
+    );
+
     if (mediaIndex === -1) {
       return res.status(404).json({ error: "Media not found" });
     }
-    
+
     const deletedMedia = mediaLibrary.splice(mediaIndex, 1)[0];
-    
+
     console.log(`✅ Media deleted: ${mediaId}`);
-    
+
     return res.json({
       success: true,
       message: "Media deleted successfully",
-      media: deletedMedia
+      media: deletedMedia,
     });
   } catch (error) {
     console.error("❌ Error deleting media:", error);
@@ -6895,24 +7153,27 @@ app.put("/api/media/:id", requireAuth, async (req, res) => {
     const userId = req.user.id;
     const mediaId = req.params.id;
     const { title, description } = req.body;
-    
+
     // Find media
-    const media = mediaLibrary.find(m => m.id === mediaId && m.user_id === userId);
-    
+    const media = mediaLibrary.find(
+      (m) => m.id === mediaId && m.user_id === userId
+    );
+
     if (!media) {
       return res.status(404).json({ error: "Media not found" });
     }
-    
+
     // Update fields if provided
     if (title) media.title = title.trim();
-    if (description !== undefined) media.description = description ? description.trim() : '';
+    if (description !== undefined)
+      media.description = description ? description.trim() : "";
     media.updated_at = new Date().toISOString();
-    
+
     console.log(`✅ Media updated: ${mediaId}`);
-    
+
     return res.json({
       success: true,
-      media: media
+      media: media,
     });
   } catch (error) {
     console.error("❌ Error updating media:", error);

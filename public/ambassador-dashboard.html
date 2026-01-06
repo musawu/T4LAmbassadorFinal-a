@@ -849,19 +849,19 @@
       // ============================================
       // LOAD DASHBOARD STATS - Consistent with Journey Page
       // ============================================
-      function loadDashboardStats() {
+      async function loadDashboardStats() {
         try {
           console.log('📊 Loading dashboard stats with journey-consistent calculation...');
           
           // MONTH DEFINITIONS (MUST MATCH JOURNEY PAGE EXACTLY)
           const months = MONTH_DATA_WITH_MILESTONES;
           
-          // Load journey data from localStorage (SAME AS journey.html)
-          const journeyStorageKey = 'journey_tasks_default';
-          const savedTasks = localStorage.getItem(journeyStorageKey);
-          const completedTasks = savedTasks ? JSON.parse(savedTasks) : {};
+          // Load journey data from database (SAME AS journey.html)
+          const response = await fetch('/api/journey/v2/progress');
+          const journeyData = response.ok ? await response.json() : { completedTasks: {} };
+          const completedTasks = journeyData.completedTasks || {};
           
-          console.log('✅ Loaded tasks from localStorage:', completedTasks);
+          console.log('✅ Loaded tasks from database:', completedTasks);
           
           // ============================================
           // CRITICAL FIX: Calculate overall progress EXACTLY like journey page
@@ -1117,15 +1117,21 @@
         // ============================================
         // Setup real-time update polling (separate from loadDashboardStats)
         // ============================================
-        let lastKnownTasks = localStorage.getItem('journey_tasks_default');
-        setInterval(() => {
-          const currentTasks = localStorage.getItem('journey_tasks_default');
-          
-          // Only reload if tasks have actually changed
-          if (currentTasks !== lastKnownTasks) {
-            console.log('🔄 Real-time update detected, refreshing stats...');
-            lastKnownTasks = currentTasks;
-            loadDashboardStats();
+        let lastKnownProgress = null;
+        setInterval(async () => {
+          try {
+            const response = await fetch('/api/journey/v2/progress');
+            if (response.ok) {
+              const data = await response.json();
+              const currentProgress = JSON.stringify(data.completedTasks);
+              if (currentProgress !== lastKnownProgress) {
+                console.log('🔄 Real-time update detected, refreshing stats...');
+                lastKnownProgress = currentProgress;
+                loadDashboardStats();
+              }
+            }
+          } catch (err) {
+            console.error('Error checking journey progress:', err);
           }
         }, 2000);
         
