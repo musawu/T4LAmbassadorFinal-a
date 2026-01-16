@@ -14,6 +14,8 @@
   // ============================================
   // INITIALIZE NOTIFICATION SYSTEM
   // ============================================
+  let currentUserRole = null;
+
   async function initNotifications() {
     if (isInitialized) return;
     isInitialized = true;
@@ -24,7 +26,8 @@
       const res = await fetch('/api/me', { credentials: 'include' });
       if (!res.ok) return;
       const me = await res.json();
-      if (!me || me.role !== 'admin') {
+      // Support both admin and ambassador roles
+      if (!me || !['admin', 'ambassador'].includes(me.role)) {
         const bellIcons = document.querySelectorAll('.bx-bell');
         bellIcons.forEach(bell => {
           const el = bell.closest('button, div, a, i') || bell;
@@ -32,6 +35,8 @@
         });
         return;
       }
+      currentUserRole = me.role;
+      console.log('🔔 Notification system for role:', currentUserRole);
     } catch (e) {
       return;
     }
@@ -51,7 +56,7 @@
     // Close panel when clicking outside
     document.addEventListener('click', handleOutsideClick);
 
-    console.log('✅ Notification system initialized');
+    console.log('✅ Notification system initialized for', currentUserRole);
   }
 
   // ============================================
@@ -381,6 +386,14 @@
       .notification-icon.type-ready_to_publish,
       .notification-icon.type-article_published {
         background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      }
+      
+      .notification-icon.type-article_rejected {
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      }
+      
+      .notification-icon.type-article_pending {
+        background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
       }
       
       .notification-icon.type-default {
@@ -724,7 +737,11 @@
       'service_request_status': 'type-service_request_status',
       'needs_update': 'type-needs_update',
       'ready_to_publish': 'type-ready_to_publish',
-      'article_published': 'type-article_published'
+      'article_published': 'type-article_published',
+      'article_approved': 'type-ready_to_publish',
+      'article_rejected': 'type-article_rejected',
+      'article_pending': 'type-article_pending',
+      'article_submitted': 'type-application_submitted'
     };
     return typeClasses[type] || 'type-default';
   }
@@ -741,7 +758,11 @@
       'service_request_status': 'bx-briefcase-alt-2',
       'needs_update': 'bx-edit',
       'ready_to_publish': 'bx-rocket',
-      'article_published': 'bx-party'
+      'article_published': 'bx-party',
+      'article_approved': 'bx-check-circle',
+      'article_rejected': 'bx-x-circle',
+      'article_pending': 'bx-time-five',
+      'article_submitted': 'bx-file'
     };
     return icons[type] || 'bx-bell';
   }

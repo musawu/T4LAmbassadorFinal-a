@@ -146,6 +146,23 @@
                     </tbody>
                 </table>
             </div>
+            
+            <!-- Pagination -->
+            <div id="paginationContainer" class="border-t border-gray-200 p-4 hidden">
+                <div class="flex items-center justify-between">
+                    <div class="text-sm text-gray-600">
+                        Showing <span id="pageStart">1</span> to <span id="pageEnd">10</span> of <span id="totalItems">0</span> results
+                    </div>
+                    <div class="flex space-x-2">
+                        <button id="prevPage" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-gray-300 disabled:hover:text-gray-700 transition-colors font-medium">
+                            Previous
+                        </button>
+                        <button id="nextPage" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-gray-300 disabled:hover:text-gray-700 transition-colors font-medium">
+                            Next
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -295,7 +312,15 @@
 
     <script>
         let ambassadors = [];
+        let filteredAmbassadors = [];
         let currentAmbassador = null;
+        
+        // Pagination state
+        const paginationState = {
+            page: 1,
+            limit: 10,
+            total: 0
+        };
 
         // Load ambassadors on page load
         async function loadAmbassadors() {
@@ -312,6 +337,8 @@
 
                 const data = await response.json();
                 ambassadors = data.ambassadors || [];
+                filteredAmbassadors = []; // Reset filtered list
+                paginationState.page = 1; // Reset to first page
 
                 console.log(`✅ Loaded ${ambassadors.length} ambassadors`);
 
@@ -354,7 +381,14 @@
                 loadingRow.remove();
             }
 
-            if (ambassadors.length === 0) {
+            // Use filtered ambassadors for rendering
+            const dataToRender = filteredAmbassadors.length > 0 || document.getElementById('searchInput').value 
+                ? filteredAmbassadors 
+                : ambassadors;
+            
+            paginationState.total = dataToRender.length;
+
+            if (dataToRender.length === 0) {
                 tbody.innerHTML = `
                     <tr>
                         <td colspan="5" class="px-4 py-8 text-center text-gray-500">
@@ -362,10 +396,16 @@
                         </td>
                     </tr>
                 `;
+                renderPagination();
                 return;
             }
 
-            tbody.innerHTML = ambassadors.map(ambassador => {
+            // Apply pagination
+            const start = (paginationState.page - 1) * paginationState.limit;
+            const end = Math.min(start + paginationState.limit, dataToRender.length);
+            const paginatedData = dataToRender.slice(start, end);
+
+            tbody.innerHTML = paginatedData.map(ambassador => {
                 const hasAudit = !!ambassador.auditData;
                 const statusClass = hasAudit ? 'audit-status-submitted' : 'audit-status-pending';
                 const statusText = hasAudit ? 'Submitted' : 'Pending';
@@ -406,6 +446,49 @@
                     </tr>
                 `;
             }).join('');
+            
+            renderPagination();
+        }
+        
+        function renderPagination() {
+            const container = document.getElementById('paginationContainer');
+            
+            if (paginationState.total <= paginationState.limit) {
+                container.classList.add('hidden');
+                return;
+            }
+            
+            const start = ((paginationState.page - 1) * paginationState.limit) + 1;
+            const end = Math.min(paginationState.page * paginationState.limit, paginationState.total);
+            const totalPages = Math.ceil(paginationState.total / paginationState.limit);
+            
+            document.getElementById('pageStart').textContent = start;
+            document.getElementById('pageEnd').textContent = end;
+            document.getElementById('totalItems').textContent = paginationState.total;
+            
+            document.getElementById('prevPage').disabled = paginationState.page === 1;
+            document.getElementById('nextPage').disabled = paginationState.page === totalPages;
+            
+            container.classList.remove('hidden');
+        }
+        
+        function goToPrevPage() {
+            console.log('⬅️ Previous button clicked, current page:', paginationState.page);
+            if (paginationState.page > 1) {
+                paginationState.page--;
+                console.log('📄 Going to page:', paginationState.page);
+                renderAmbassadorsList();
+            }
+        }
+        
+        function goToNextPage() {
+            const totalPages = Math.ceil(paginationState.total / paginationState.limit);
+            console.log('➡️ Next button clicked, current page:', paginationState.page, 'total pages:', totalPages);
+            if (paginationState.page < totalPages) {
+                paginationState.page++;
+                console.log('📄 Going to page:', paginationState.page);
+                renderAmbassadorsList();
+            }
         }
 
         function updateStats() {
@@ -578,17 +661,25 @@
         document.getElementById('searchInput').addEventListener('input', (e) => {
             const searchTerm = e.target.value.toLowerCase();
             
-            const filteredAmbassadors = ambassadors.filter(ambassador => {
-                return ambassador.name.toLowerCase().includes(searchTerm) ||
-                       ambassador.email.toLowerCase().includes(searchTerm);
-            });
+            // Reset to page 1 when searching
+            paginationState.page = 1;
+            
+            if (searchTerm) {
+                filteredAmbassadors = ambassadors.filter(ambassador => {
+                    const name = (ambassador.name || '').toLowerCase();
+                    const email = (ambassador.email || '').toLowerCase();
+                    return name.includes(searchTerm) || email.includes(searchTerm);
+                });
+            } else {
+                filteredAmbassadors = [];
+            }
 
-            // Temporarily replace ambassadors array for rendering
-            const originalAmbassadors = ambassadors;
-            ambassadors = filteredAmbassadors;
             renderAmbassadorsList();
-            ambassadors = originalAmbassadors;
         });
+        
+        // Pagination event listeners
+        document.getElementById('prevPage').addEventListener('click', goToPrevPage);
+        document.getElementById('nextPage').addEventListener('click', goToNextPage);
 
         function showToast(message, type = 'info') {
             const container = document.getElementById('toastContainer');

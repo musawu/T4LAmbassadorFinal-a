@@ -868,67 +868,40 @@
   <!-- Note: Journey page has its own React-based sidebar, so global sidebar is not used here -->
   <div id="root"></div>
 
-  <!-- Profile Audit Recommendations Popup -->
+  <!-- Profile Audit Recommendations Popup - Simplified Flex Layout -->
   <div id="profileAuditRecommendationsPopup" class="popup-overlay hidden">
-    <div class="popup-content">
+    <div class="popup-content" style="max-width: 900px;">
       <button class="popup-close" onclick="closeProfileAuditRecommendationsPopup()">×</button>
-      <div class="template-container">
-        <span class="badge"><i class='bx bx-user-check'></i> Profile Audit Results</span>
-        <h1 class="template-title"><i class='bx bx-search-alt'></i> Your Profile Audit Recommendations</h1>
-        <p class="template-subtitle">Review the personalized recommendations from our team</p>
-
-        <div class="instructions">
-          <h3><i class='bx bx-list-check'></i> How to Use These Recommendations</h3>
-          <ol>
-            <li><strong>Review both documents</strong> - your LinkedIn profile audit and speaker bio recommendations</li>
-            <li><strong>Implement the suggestions</strong> on your LinkedIn profile and speaker materials</li>
-            <li><strong>Track your progress</strong> as you update your profiles</li>
-            <li><strong>Mark as complete</strong> once you've implemented the key recommendations</li>
-          </ol>
-        </div>
-
-        <!-- LinkedIn Profile Audit Section -->
-        <div class="upload-section" id="linkedinAuditSection">
-          <h3><i class='bx bxl-linkedin'></i> LinkedIn Profile Audit</h3>
+      <div class="template-container" style="padding: 40px 30px;">
+        <!-- Flex container for the two audit sections -->
+        <div style="display: flex; flex-direction: row; gap: 24px; flex-wrap: wrap; justify-content: center;">
           
-          <div id="linkedinAuditPlaceholder" class="text-center py-6">
-            <i class='bx bx-time text-4xl text-gray-400 mb-4'></i>
-            <p class="text-gray-600">Your LinkedIn profile audit is being prepared by our team.</p>
-            <p class="text-sm text-gray-500 mt-2">Check back in 24-48 hours for your personalized recommendations.</p>
-          </div>
-          
-          <div id="linkedinAuditContent" class="hidden">
-            <p class="text-gray-700 mb-4">Our team has reviewed your LinkedIn profile. Here are your personalized recommendations:</p>
-            <a href="#" id="linkedinAuditLink" target="_blank" class="btn-canva w-full justify-center">
-              <i class='bx bx-file'></i> View LinkedIn Audit Recommendations
+          <!-- LinkedIn Profile Audit Section -->
+          <div style="flex: 1; min-width: 300px; max-width: 400px; border: 3px dashed #350e6f; border-radius: 16px; padding: 32px; text-align: center; background: white;">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 16px;">
+              <i class='bx bxl-linkedin' style="font-size: 1.8rem; color: #350e6f;"></i>
+              <h3 style="color: #350e6f; font-size: 1.3rem; font-weight: 700; margin: 0;">LinkedIn Profile Audit</h3>
+            </div>
+            <p style="color: #6b7280; margin-bottom: 20px; font-size: 0.95rem;">Our team has reviewed your LinkedIn profile. Here are your personalized recommendations:</p>
+            <a href="#" id="linkedinAuditLink" style="display: flex; align-items: center; justify-content: center; gap: 8px; background: #350e6f; color: white; padding: 14px 24px; text-decoration: none; border-radius: 12px; font-weight: 600; font-size: 0.95rem; margin-bottom: 16px; transition: all 0.3s ease; cursor: pointer;">
+              <i class='bx bx-loader-alt bx-spin'></i> Loading...
             </a>
-            <p class="text-sm text-gray-500 mt-2">Last updated: <span id="linkedinAuditDate">-</span></p>
+            <p style="color: #9ca3af; font-size: 0.85rem; margin: 0;">Last updated: <span id="linkedinAuditDate">--</span></p>
           </div>
-        </div>
 
-        <!-- Speaker Bio Audit Section -->
-        <div class="upload-section" id="speakerBioAuditSection">
-          <h3><i class='bx bx-microphone'></i> Speaker Bio Audit</h3>
-          
-          <div id="speakerBioPlaceholder" class="text-center py-6">
-            <i class='bx bx-time text-4xl text-gray-400 mb-4'></i>
-            <p class="text-gray-600">Your speaker bio recommendations are being prepared.</p>
-            <p class="text-sm text-gray-500 mt-2">Our team will send you personalized speaker bio feedback.</p>
-          </div>
-          
-          <div id="speakerBioContent" class="hidden">
-            <p class="text-gray-700 mb-4">Our team has reviewed your speaker bio. Here are your personalized recommendations:</p>
-            <a href="#" id="speakerBioLink" target="_blank" class="btn-canva w-full justify-center">
-              <i class='bx bx-file'></i> View Speaker Bio Recommendations
+          <!-- Speaker Bio Audit Section -->
+          <div style="flex: 1; min-width: 300px; max-width: 400px; border: 3px dashed #350e6f; border-radius: 16px; padding: 32px; text-align: center; background: white;">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 16px;">
+              <i class='bx bx-microphone' style="font-size: 1.8rem; color: #350e6f;"></i>
+              <h3 style="color: #350e6f; font-size: 1.3rem; font-weight: 700; margin: 0;">Speaker Bio Audit</h3>
+            </div>
+            <p style="color: #6b7280; margin-bottom: 20px; font-size: 0.95rem;">Our team has reviewed your speaker bio. Here are your personalized recommendations:</p>
+            <a href="#" id="speakerBioLink" style="display: flex; align-items: center; justify-content: center; gap: 8px; background: #350e6f; color: white; padding: 14px 24px; text-decoration: none; border-radius: 12px; font-weight: 600; font-size: 0.95rem; margin-bottom: 16px; transition: all 0.3s ease; cursor: pointer;">
+              <i class='bx bx-loader-alt bx-spin'></i> Loading...
             </a>
-            <p class="text-sm text-gray-500 mt-2">Last updated: <span id="speakerBioDate">-</span></p>
+            <p style="color: #9ca3af; font-size: 0.85rem; margin: 0;">Last updated: <span id="speakerBioDate">--</span></p>
           </div>
-        </div>
 
-        <div class="action-buttons mt-6">
-          <button class="btn-submit" onclick="markProfileAuditAsComplete()">
-            <i class='bx bx-check-shield'></i> Mark Recommendations as Implemented
-          </button>
         </div>
       </div>
     </div>
@@ -1531,92 +1504,180 @@
   <script type="text/babel">
     const { useState, useEffect, useCallback } = React;
 
-    // Store for audit recommendations (in real app, this would come from API)
+    // Store for audit recommendations
     let auditRecommendations = {
       linkedin: {
         hasRecommendations: false,
         url: '',
+        feedback: '',
         lastUpdated: ''
       },
       speakerBio: {
         hasRecommendations: false,
         url: '',
+        feedback: '',
         lastUpdated: ''
       }
     };
 
-    // Function to load audit recommendations (simulating API call)
-    function loadAuditRecommendations() {
-      // In real app, this would be a fetch to your API
-      // For demo, we'll check localStorage first
-      const saved = localStorage.getItem('audit_recommendations');
-      if (saved) {
-        auditRecommendations = JSON.parse(saved);
+    // Function to load audit recommendations from backend API
+    async function loadAuditRecommendations() {
+      try {
+        const response = await fetch('/api/journey/linkedin-audit', {
+          method: 'GET',
+          credentials: 'include'
+        });
+
+        if (!response.ok) {
+          console.error('Failed to fetch audit recommendations');
+          return auditRecommendations;
+        }
+
+        const data = await response.json();
+        
+        if (data.hasAudit && data.audit) {
+          const submittedDate = data.audit.submittedAt 
+            ? new Date(data.audit.submittedAt).toLocaleDateString() 
+            : new Date().toLocaleDateString();
+          
+          auditRecommendations = {
+            linkedin: {
+              hasRecommendations: true,
+              url: data.audit.linkedin_url || '',
+              feedback: data.audit.feedback || '',
+              lastUpdated: submittedDate
+            },
+            speakerBio: {
+              hasRecommendations: !!data.audit.speaker_bio_url,
+              url: data.audit.speaker_bio_url || '',
+              feedback: data.audit.feedback || '',
+              lastUpdated: submittedDate
+            }
+          };
+          
+          console.log('✅ Loaded audit recommendations from backend:', auditRecommendations);
+        } else {
+          console.log('📭 No audit recommendations found');
+          auditRecommendations = {
+            linkedin: { hasRecommendations: false, url: '', feedback: '', lastUpdated: '' },
+            speakerBio: { hasRecommendations: false, url: '', feedback: '', lastUpdated: '' }
+          };
+        }
+        
+        return auditRecommendations;
+      } catch (error) {
+        console.error('❌ Error loading audit recommendations:', error);
+        return auditRecommendations;
       }
-      
-      // Check if admin has sent recommendations (simulated)
-      // In real app, this would check with your backend
-      const adminHasSent = Math.random() > 0.5; // 50% chance for demo
-      
-      if (adminHasSent && !auditRecommendations.linkedin.hasRecommendations) {
-        // Simulate admin sending recommendations
-        auditRecommendations = {
-          linkedin: {
-            hasRecommendations: true,
-            url: 'https://gamma.app/docs/Your-LinkedIn-Profile-Audit-Recommendations-xyz123',
-            lastUpdated: new Date().toLocaleDateString()
-          },
-          speakerBio: {
-            hasRecommendations: true,
-            url: 'https://gamma.app/docs/Your-Speaker-Bio-Recommendations-abc456',
-            lastUpdated: new Date().toLocaleDateString()
-          }
-        };
-        localStorage.setItem('audit_recommendations', JSON.stringify(auditRecommendations));
-      }
-      
-      return auditRecommendations;
     }
 
     // Open profile audit recommendations popup
-    function openProfileAuditRecommendationsPopup() {
+    async function openProfileAuditRecommendationsPopup() {
       const popup = document.getElementById('profileAuditRecommendationsPopup');
       popup.classList.remove('hidden');
       document.body.style.overflow = 'hidden';
       
-      // Load recommendations
-      const recommendations = loadAuditRecommendations();
-      
-      // Update LinkedIn section
-      const linkedinPlaceholder = document.getElementById('linkedinAuditPlaceholder');
-      const linkedinContent = document.getElementById('linkedinAuditContent');
+      // Show loading state
       const linkedinLink = document.getElementById('linkedinAuditLink');
       const linkedinDate = document.getElementById('linkedinAuditDate');
-      
-      if (recommendations.linkedin.hasRecommendations) {
-        linkedinPlaceholder.classList.add('hidden');
-        linkedinContent.classList.remove('hidden');
-        linkedinLink.href = recommendations.linkedin.url;
-        linkedinDate.textContent = recommendations.linkedin.lastUpdated;
-      } else {
-        linkedinPlaceholder.classList.remove('hidden');
-        linkedinContent.classList.add('hidden');
-      }
-      
-      // Update Speaker Bio section
-      const speakerBioPlaceholder = document.getElementById('speakerBioPlaceholder');
-      const speakerBioContent = document.getElementById('speakerBioContent');
       const speakerBioLink = document.getElementById('speakerBioLink');
       const speakerBioDate = document.getElementById('speakerBioDate');
       
+      linkedinLink.innerHTML = '<i class="bx bx-loader-alt bx-spin"></i> Loading...';
+      speakerBioLink.innerHTML = '<i class="bx bx-loader-alt bx-spin"></i> Loading...';
+      
+      // Load recommendations from backend
+      const recommendations = await loadAuditRecommendations();
+      
+      // Update LinkedIn section
+      if (recommendations.linkedin.hasRecommendations) {
+        linkedinLink.innerHTML = '<i class="bx bx-file"></i> View LinkedIn Audit Recommendations';
+        linkedinLink.onclick = (e) => {
+          e.preventDefault();
+          showAuditFeedbackModal('LinkedIn Profile Audit', recommendations.linkedin.feedback, recommendations.linkedin.url);
+        };
+        linkedinDate.textContent = recommendations.linkedin.lastUpdated;
+      } else {
+        linkedinLink.innerHTML = '<i class="bx bx-time"></i> Audit Pending';
+        linkedinLink.onclick = (e) => {
+          e.preventDefault();
+          alert('Your LinkedIn profile audit is pending. The admin will review your profile and provide recommendations soon.');
+        };
+        linkedinDate.textContent = 'Pending';
+      }
+      
+      // Update Speaker Bio section
       if (recommendations.speakerBio.hasRecommendations) {
-        speakerBioPlaceholder.classList.add('hidden');
-        speakerBioContent.classList.remove('hidden');
-        speakerBioLink.href = recommendations.speakerBio.url;
+        speakerBioLink.innerHTML = '<i class="bx bx-file"></i> View Speaker Bio Recommendations';
+        speakerBioLink.onclick = (e) => {
+          e.preventDefault();
+          showAuditFeedbackModal('Speaker Bio Audit', recommendations.speakerBio.feedback, recommendations.speakerBio.url);
+        };
         speakerBioDate.textContent = recommendations.speakerBio.lastUpdated;
       } else {
-        speakerBioPlaceholder.classList.remove('hidden');
-        speakerBioContent.classList.add('hidden');
+        speakerBioLink.innerHTML = '<i class="bx bx-time"></i> Audit Pending';
+        speakerBioLink.onclick = (e) => {
+          e.preventDefault();
+          alert('Your speaker bio audit is pending. The admin will review your bio and provide recommendations soon.');
+        };
+        speakerBioDate.textContent = 'Pending';
+      }
+    }
+    
+    // Show audit feedback in a modal
+    function showAuditFeedbackModal(title, feedback, profileUrl) {
+      // Create modal overlay
+      const modalOverlay = document.createElement('div');
+      modalOverlay.id = 'auditFeedbackModal';
+      modalOverlay.className = 'popup-overlay';
+      modalOverlay.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 9999;';
+      
+      // Determine the URL label based on the title
+      const urlLabel = title.includes('LinkedIn') ? 'LinkedIn Profile URL:' : 'Speaker Bio URL:';
+      
+      modalOverlay.innerHTML = `
+        <div style="background: white; border-radius: 16px; max-width: 600px; width: 90%; max-height: 80vh; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);">
+          <div style="padding: 20px 24px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: #350e6f;">${title}</h3>
+            <button onclick="closeAuditFeedbackModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #6b7280; padding: 4px;">&times;</button>
+          </div>
+          <div style="padding: 24px; max-height: 50vh; overflow-y: auto;">
+            <h4 style="margin: 0 0 12px 0; font-size: 1rem; font-weight: 600; color: #374151;">Recommendations & Feedback:</h4>
+            <div style="background: #f9fafb; border-radius: 12px; padding: 16px; white-space: pre-wrap; color: #374151; line-height: 1.6; font-size: 0.95rem;">
+              ${feedback || 'No feedback provided yet.'}
+            </div>
+            ${profileUrl ? `
+            <div style="margin-top: 20px;">
+              <h4 style="margin: 0 0 8px 0; font-size: 1rem; font-weight: 600; color: #374151;">${urlLabel}</h4>
+              <a href="${profileUrl}" target="_blank" style="color: #350e6f; font-size: 0.95rem; word-break: break-all; text-decoration: underline;">
+                ${profileUrl}
+              </a>
+            </div>
+            ` : ''}
+          </div>
+          <div style="padding: 16px 24px; border-top: 1px solid #e5e7eb; display: flex; justify-content: flex-end;">
+            <button onclick="closeAuditFeedbackModal()" style="background: #350e6f; color: white; border: none; padding: 10px 24px; border-radius: 8px; font-weight: 600; cursor: pointer;">
+              Close
+            </button>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(modalOverlay);
+      
+      // Close on overlay click
+      modalOverlay.addEventListener('click', (e) => {
+        if (e.target === modalOverlay) {
+          closeAuditFeedbackModal();
+        }
+      });
+    }
+    
+    // Close audit feedback modal
+    function closeAuditFeedbackModal() {
+      const modal = document.getElementById('auditFeedbackModal');
+      if (modal) {
+        modal.remove();
       }
     }
 
@@ -1641,33 +1702,9 @@
       }
     }
 
-    // ADMIN FUNCTION: Simulate admin sending recommendations
-    // In real app, this would be an admin endpoint
-    function adminSendAuditRecommendations(userId, linkedinUrl, speakerBioUrl) {
-      const recommendations = {
-        linkedin: {
-          hasRecommendations: true,
-          url: linkedinUrl,
-          lastUpdated: new Date().toLocaleDateString()
-        },
-        speakerBio: {
-          hasRecommendations: true,
-          url: speakerBioUrl,
-          lastUpdated: new Date().toLocaleDateString()
-        }
-      };
-      
-      // Save to localStorage (in real app, save to database)
-      localStorage.setItem('audit_recommendations', JSON.stringify(recommendations));
-      
-      // In real app, you would:
-      // 1. Save to your database
-      // 2. Send notification to user
-      // 3. Update user's task status
-      
-      console.log('Admin sent recommendations:', recommendations);
-      return recommendations;
-    }
+    // Note: Admin audit submission is now handled via the backend API
+    // Admin submits audits through /admin/api/ambassadors/:id/linkedin-audit
+    // Ambassadors receive audits through /api/journey/linkedin-audit
 
     // Carousel selection state for Month 1 (NEW: 3 options)
     let selectedMonth1CarouselIndex = 0;
@@ -2576,7 +2613,7 @@ What quote guides your approach to leadership or change?
         } else if (action === 'popup:profile-audit') {
           openProfileAuditPopup();
         } else if (action === 'popup:audit-recommendations') {
-          // NEW: Open the profile audit recommendations popup
+          // Open the profile audit recommendations popup
           openProfileAuditRecommendationsPopup();
         } else if (action === 'email' || action.startsWith('email:')) {
           let subject, body;
@@ -3256,6 +3293,9 @@ Best,
                   </p>
                 </div>
                 <div className="flex items-center gap-4">
+                  <button id="notificationBell" className="relative p-2 hover:bg-gray-100 rounded-full transition-colors" title="Notifications">
+                    <i className="bx bx-bell text-2xl text-gray-700"></i>
+                  </button>
                   <div className="text-right">
                     <div className="text-sm text-gray-600">Overall Progress</div>
                     <div className="text-2xl font-bold text-[#4b0d7f]">{Math.round(overallProgress)}%</div>

@@ -419,8 +419,8 @@ const {
 // ------------------------
 // Basic Middleware
 // ------------------------
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '10mb' }));
 
 // Add debug middleware to see incoming requests
 app.use((req, res, next) => {
@@ -3798,6 +3798,27 @@ app.get('/admin/api/ambassadors/:id/linkedin-audit', requireAuth, requireRole('a
   }
 });
 
+// Get LinkedIn Audits Count (for admin dashboard stats)
+app.get('/admin/api/linkedin-audits/count', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    // Count total LinkedIn audits submitted by admin
+    const { count, error } = await supabase
+      .from('linkedin_audits')
+      .select('*', { count: 'exact', head: true });
+
+    if (error) {
+      console.error('❌ Error counting LinkedIn audits:', error);
+      return res.status(500).json({ error: 'Failed to count audits' });
+    }
+
+    console.log('✅ LinkedIn audits count:', count);
+    res.json({ count: count || 0 });
+  } catch (error) {
+    console.error('❌ Error fetching LinkedIn audit count:', error);
+    res.status(500).json({ error: 'Failed to fetch audit count' });
+  }
+});
+
 // ============================================
 // AMBASSADOR: Get Own LinkedIn Audit
 // ============================================
@@ -3809,24 +3830,55 @@ app.get(
     try {
       const userId = req.auth.userId;
 
-      console.log("📖 Ambassador fetching LinkedIn audit");
+      console.log("📖 Ambassador fetching LinkedIn audit for user:", userId);
 
-      // Get journey progress
-      const progress = await getJourneyProgress(userId);
-
-      if (!progress || !progress.linkedin_audit) {
+      // First, get the ambassador's actual ambassador_id from the ambassadors table
+      // The userId from auth might be different from the ambassador_id
+      const ambassador = await getUserById(userId, "ambassador");
+      
+      if (!ambassador) {
+        console.log("❌ Ambassador not found for user:", userId);
         return res.json({
           hasAudit: false,
           audit: null
         });
       }
 
+      // Use the ambassador's actual ID (ambassador_id field or id field)
+      const ambassadorId = ambassador.ambassador_id || ambassador.id;
+      console.log("🔍 Looking for audit with ambassador_id:", ambassadorId);
+
+      // Fetch directly from linkedin_audits table (where admin submits)
+      const { data, error } = await supabase
+        .from('linkedin_audits')
+        .select('*')
+        .eq('ambassador_id', ambassadorId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        // PGRST116 = no rows found, which is OK
+        console.error("❌ Error fetching LinkedIn audit:", error);
+        throw error;
+      }
+
+      if (!data) {
+        console.log("📭 No LinkedIn audit found for ambassador:", ambassadorId);
+        return res.json({
+          hasAudit: false,
+          audit: null
+        });
+      }
+
+      console.log("✅ LinkedIn audit found for ambassador:", ambassadorId);
       return res.json({
         hasAudit: true,
         audit: {
-          url: progress.linkedin_audit.url,
-          feedback: progress.linkedin_audit.feedback,
-          submittedAt: progress.linkedin_audit.submittedAt
+          linkedin_url: data.linkedin_url,
+          speaker_bio_url: data.speaker_bio_url,
+          feedback: data.feedback,
+          status: data.status,
+          submittedAt: data.submitted_at,
+          updatedAt: data.updated_at
         }
       });
     } catch (error) {
@@ -5178,6 +5230,82 @@ app.post(
   }
 );
 
+// UPDATE Partner
+app.put(
+  "/admin/api/partners/:id",
+  requireAuth,
+  requireRole("admin"),
+  async (req, res) => {
+    try {
+      const { contact_person, organization_name, email, access_code, status } = req.body;
+      const partner = await getUserById(req.params.id, "partner");
+
+      if (!partner) {
+        return res.status(404).json({ error: "Partner not found" });
+      }
+
+      const updates = {};
+
+      // Check if email is being changed and if it's already taken
+      if (email && email.toLowerCase() !== partner.email.toLowerCase()) {
+        const existingUser = await getUserByEmail(email.toLowerCase(), "partner");
+        if (existingUser && existingUser.id !== req.params.id) {
+          return res.status(400).json({ error: "Email already registered" });
+        }
+        updates.email = email.toLowerCase();
+      }
+
+      // Check if access code is being changed
+      if (access_code && access_code !== partner.access_code) {
+        updates.access_code = access_code.toUpperCase();
+      }
+
+      if (contact_person) updates.contact_person = contact_person;
+      if (organization_name) updates.organization_name = organization_name;
+      if (status) updates.status = status;
+
+      const updatedPartner = await updateUser(req.params.id, updates, "partner");
+
+      return res.json({
+        success: true,
+        partner: {
+          id: updatedPartner.id,
+          contact_person: updatedPartner.contact_person,
+          organization_name: updatedPartner.organization_name,
+          email: updatedPartner.email,
+          access_code: updatedPartner.access_code,
+          status: updatedPartner.status,
+        },
+      });
+    } catch (error) {
+      console.error("Error updating partner:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+
+// DELETE Partner
+app.delete(
+  "/admin/api/partners/:id",
+  requireAuth,
+  requireRole("admin"),
+  async (req, res) => {
+    try {
+      const partner = await getUserById(req.params.id, "partner");
+      if (!partner) {
+        return res.status(404).json({ error: "Partner not found" });
+      }
+
+      await deleteUser(req.params.id, "partner");
+
+      return res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting partner:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+
 // ============================================
 // ADMIN: Generate Unique Access Codes
 // ============================================
@@ -5406,6 +5534,10 @@ app.get(
             }`.trim()
           : "Unknown Author";
 
+        // Calculate review history stats
+        const reviewHistory = article.review_history || [];
+        const pendingFeedback = reviewHistory.filter((r) => !r.addressed).length;
+
         return {
           id: article.article_id,
           article_id: article.article_id,
@@ -5418,6 +5550,9 @@ app.get(
             ? new Date(article.created_at).toLocaleDateString()
             : "-",
           ambassadorName: authorName,
+          review_history: reviewHistory, // ✅ Include full review history
+          review_count: reviewHistory.length, // ✅ Total reviews count
+          pending_feedback_count: pendingFeedback, // ✅ Unaddressed feedback count
         };
       });
 
@@ -5525,6 +5660,7 @@ app.get(
         updatedAt: article.updated_at,
         views: article.views || 0,
         likes: article.likes || 0,
+        review_history: article.review_history || [], // ✅ Include review history for admin dashboard
       };
 
       console.log("✅ Article sent with ambassador_id:", ambassadorId);
@@ -5613,12 +5749,15 @@ app.patch(
   async (req, res) => {
     try {
       const articleId = req.params.id;
-      const { status, publication_link } = req.body;
+      const { status, publication_link, feedback_message } = req.body;
+      const adminUserId = req.auth.userId;
 
       console.log("📝 Updating article status:", {
         articleId,
         status,
         publication_link,
+        feedback_message,
+        adminUserId,
       });
 
       // Check if article exists
@@ -5632,17 +5771,61 @@ app.patch(
         return res.status(404).json({ error: "Article not found" });
       }
 
+      // Get admin info for review history
+      const admin = await getUserById(adminUserId, "admin");
+      const adminName = admin
+        ? `${admin.first_name || ""} ${admin.last_name || ""}`.trim() ||
+          admin.name ||
+          "Admin"
+        : "Admin";
+      const adminEmail = admin ? admin.email : "unknown";
+
       const updates = {};
       if (status) updates.status = status;
       if (publication_link) updates.publication_link = publication_link;
       updates.updated_at = new Date().toISOString();
 
-      const { data: updatedArticle, error: updateError } = await supabase
+      // Add to review history if there's a feedback message or status change
+      let newReviewEntry = null;
+      if (feedback_message || (status && status !== existingArticle.status)) {
+        const existingHistory = existingArticle.review_history || [];
+        newReviewEntry = {
+          id: `rev_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          admin_name: adminName,
+          admin_email: adminEmail,
+          message: feedback_message || `Status changed to ${status}`,
+          old_status: existingArticle.status,
+          new_status: status || existingArticle.status,
+          timestamp: new Date().toISOString(),
+          addressed: false,
+        };
+        updates.review_history = [...existingHistory, newReviewEntry];
+        console.log("📝 Adding review history entry:", newReviewEntry);
+      }
+
+      // Try to update with review_history first
+      let updatedArticle;
+      let updateError;
+      
+      ({ data: updatedArticle, error: updateError } = await supabase
         .from("articles")
         .update(updates)
         .eq("article_id", articleId)
         .select()
-        .single();
+        .single());
+
+      // If review_history column doesn't exist, retry without it
+      if (updateError && updateError.code === 'PGRST204' && updateError.message.includes('review_history')) {
+        console.warn("⚠️ review_history column not found, updating without it. Please add the column to your Supabase articles table.");
+        delete updates.review_history;
+        
+        ({ data: updatedArticle, error: updateError } = await supabase
+          .from("articles")
+          .update(updates)
+          .eq("article_id", articleId)
+          .select()
+          .single());
+      }
 
       if (updateError) {
         console.error("Error updating article:", updateError);
@@ -5653,6 +5836,7 @@ app.patch(
         article_id: updatedArticle.article_id,
         old_status: existingArticle.status,
         new_status: updatedArticle.status,
+        review_history_count: (updatedArticle.review_history || []).length,
         status_match:
           existingArticle.status === updatedArticle.status
             ? "⚠️ SAME"
@@ -6370,8 +6554,23 @@ app.post(
         notificationLink = `/article-progress.html?articleId=${
           targetArticleId || ""
         }`;
+      } else if (notificationType === "article_approved") {
+        notificationTitle = "✅ Your Article Has Been Approved!";
+        notificationLink = `/ambassador-review.html?articleId=${
+          targetArticleId || ""
+        }`;
+      } else if (notificationType === "article_rejected") {
+        notificationTitle = "❌ Article Not Approved";
+        notificationLink = `/ambassador-review.html?articleId=${
+          targetArticleId || ""
+        }`;
+      } else if (notificationType === "article_pending") {
+        notificationTitle = "⏳ Article Under Review";
+        notificationLink = `/ambassador-review.html?articleId=${
+          targetArticleId || ""
+        }`;
       } else if (notificationType === "needs_update") {
-        notificationTitle = "📝 Article Feedback";
+        notificationTitle = "📝 Article Needs Updates";
         notificationLink = `/ambassador-review.html?articleId=${
           targetArticleId || ""
         }`;
@@ -6413,6 +6612,66 @@ app.post(
         "✅ Notification created successfully:",
         notification.notification_id
       );
+
+      // ✅ Also add this feedback to the article's review_history
+      if (targetArticleId && message) {
+        try {
+          // Fetch the current article to get existing review_history
+          const { data: currentArticle, error: articleFetchError } =
+            await supabase
+              .from("articles")
+              .select("*, status")
+              .eq("article_id", targetArticleId)
+              .single();
+
+          if (!articleFetchError && currentArticle) {
+            const adminEmail = admin ? admin.email : "unknown";
+            const adminFullName = admin
+              ? `${admin.first_name || ""} ${admin.last_name || ""}`.trim() ||
+                admin.name ||
+                "Admin"
+              : "Admin";
+
+            const existingHistory = currentArticle.review_history || [];
+            const newReviewEntry = {
+              id: `rev_${Date.now()}_${Math.random()
+                .toString(36)
+                .substr(2, 9)}`,
+              admin_name: adminFullName,
+              admin_email: adminEmail,
+              message: message,
+              old_status: currentArticle.status,
+              new_status: notificationType === "needs_update" ? "needs_update" : currentArticle.status,
+              timestamp: new Date().toISOString(),
+              addressed: false,
+            };
+
+            const { error: historyUpdateError } = await supabase
+              .from("articles")
+              .update({
+                review_history: [...existingHistory, newReviewEntry],
+                updated_at: new Date().toISOString(),
+              })
+              .eq("article_id", targetArticleId);
+
+            // Gracefully handle if review_history column doesn't exist
+            if (historyUpdateError) {
+              if (historyUpdateError.code === 'PGRST204' && historyUpdateError.message.includes('review_history')) {
+                console.warn("⚠️ review_history column not found. Please add it to your Supabase articles table.");
+              } else {
+                console.error(
+                  "⚠️ Failed to update review history:",
+                  historyUpdateError
+                );
+              }
+            } else {
+              console.log("✅ Review history updated for article:", targetArticleId);
+            }
+          }
+        } catch (historyError) {
+          console.error("⚠️ Error updating review history:", historyError);
+        }
+      }
 
       return res.json({
         success: true,
@@ -6483,6 +6742,29 @@ app.patch(
       if (byline) updates.excerpt = byline;
       // Allow status update to reset to pending when editing
       if (status) updates.status = status;
+
+      // ✅ Mark all previous unaddressed feedback as "addressed" when ambassador resubmits
+      const existingHistory = existingArticle.review_history || [];
+      if (existingHistory.length > 0) {
+        const updatedHistory = existingHistory.map((entry) => {
+          if (!entry.addressed) {
+            console.log(
+              "📝 Marking feedback as addressed:",
+              entry.id,
+              "from:",
+              entry.admin_name
+            );
+            return { ...entry, addressed: true, addressed_at: new Date().toISOString() };
+          }
+          return entry;
+        });
+        updates.review_history = updatedHistory;
+        console.log(
+          "✅ Marked",
+          existingHistory.filter((e) => !e.addressed).length,
+          "feedback entries as addressed"
+        );
+      }
 
       const updatedArticle = await updateArticle(articleId, updates);
 
