@@ -2231,6 +2231,50 @@ async function markAllNotificationsRead() {
                     </span>`;
                 }
                 
+                // ✅ Check if ambassador has given consent to publish
+                const hasConsent = item.ambassador_consent_to_publish === true;
+                const isApproved = (item.status || '').toLowerCase() === 'approved';
+                const isPublished = (item.status || '').toLowerCase() === 'published';
+                
+                // Determine Share Publication button state
+                let shareButtonHtml = '';
+                if (isPublished) {
+                    // Already published - show disabled badge
+                    shareButtonHtml = `
+                        <span class="px-3 py-1.5 rounded-lg bg-green-100 text-green-700 font-semibold text-xs">
+                            <i class='bx bx-check'></i> Published
+                        </span>
+                    `;
+                } else if (hasConsent && isApproved) {
+                    // Has consent AND approved - enable button
+                    shareButtonHtml = `
+                        <button class="px-3 py-1.5 rounded-lg border border-green-500 bg-green-50 text-green-700 hover:bg-green-100 font-semibold" 
+                                data-action="pushPublication" 
+                                data-id="${articleId}"
+                                data-title="${title.replace(/"/g, '&quot;')}"
+                                data-consent="true">
+                            <i class='bx bx-share-alt'></i> Share Publication
+                        </button>
+                    `;
+                } else if (isApproved && !hasConsent) {
+                    // Approved but no consent - show waiting badge
+                    shareButtonHtml = `
+                        <span class="px-3 py-1.5 rounded-lg bg-yellow-100 text-yellow-700 font-semibold text-xs cursor-help" 
+                              title="Waiting for ambassador to give consent to publish">
+                            <i class='bx bx-time'></i> Awaiting Consent
+                        </span>
+                    `;
+                } else {
+                    // Not approved yet - show disabled button
+                    shareButtonHtml = `
+                        <button class="px-3 py-1.5 rounded-lg border border-gray-300 bg-gray-100 text-gray-400 font-semibold cursor-not-allowed" 
+                                disabled
+                                title="Article must be approved first">
+                            Share Publication
+                        </button>
+                    `;
+                }
+                
                 tr.innerHTML = `
                     <td class="px-4 py-3 text-sm text-gray-900">${title}</td>
                     <td class="px-4 py-3 text-sm text-gray-700">${author}</td>
@@ -2246,12 +2290,7 @@ async function markAllNotificationsRead() {
                                 data-id="${articleId}">
                             View Details
                         </button>
-                        <button class="px-3 py-1.5 rounded-lg border border-purple-300 text-purple-700 hover:bg-purple-50 font-semibold" 
-                                data-action="pushPublication" 
-                                data-id="${articleId}"
-                                data-title="${title.replace(/"/g, '&quot;')}">
-                            Share Publication
-                        </button>
+                        ${shareButtonHtml}
                         <button class="px-3 py-1.5 rounded-lg border border-red-300 text-red-700 hover:bg-red-50 font-semibold" 
                                 data-action="delete" 
                                 data-id="${articleId}">
@@ -3461,13 +3500,31 @@ async function markAllNotificationsRead() {
         // PUSH PUBLICATION MODAL FUNCTIONS (EXISTING - UNCHANGED)
         // ============================================
         
-        function openPushPublicationModal(articleId, articleTitle) {
+        function openPushPublicationModal(articleId, articleTitle, hasConsent = false) {
+            // ✅ Verify consent before opening modal
+            if (!hasConsent) {
+                // Double-check consent from the article list
+                const article = state.items.find(item => 
+                    (item.article_id === articleId || item.id === articleId)
+                );
+                
+                if (article && !article.ambassador_consent_to_publish) {
+                    showToast('⚠️ Cannot share publication - Ambassador has not given consent yet.', true);
+                    return;
+                }
+                
+                // If article found and has consent, allow
+                if (article && article.ambassador_consent_to_publish) {
+                    hasConsent = true;
+                }
+            }
+            
             const modal = document.getElementById('pushPublicationModal');
             document.getElementById('pushPublicationArticleId').value = articleId;
             document.getElementById('pushPublicationTitle').textContent = articleTitle || 'Article';
             document.getElementById('publicationLink').value = '';
             document.getElementById('publicationMessage').value = '';
-            
+
             modal.classList.remove('hidden');
             modal.classList.add('flex');
         }
@@ -3912,7 +3969,8 @@ async function markAllNotificationsRead() {
                         openDeleteModal(id);
                         break;
                     case 'pushPublication':
-                        openPushPublicationModal(id, target.getAttribute('data-title'));
+                        const hasConsent = target.getAttribute('data-consent') === 'true';
+                        openPushPublicationModal(id, target.getAttribute('data-title'), hasConsent);
                         break;
                 }
             });

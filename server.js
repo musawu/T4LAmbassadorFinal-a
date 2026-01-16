@@ -942,6 +942,35 @@ app.post(
         console.error("   ⚠️ Failed to notify admins:", adminNotifError.message);
       }
 
+      // Notify the partner who posted the opportunity
+      try {
+        if (post.partner_id) {
+          const { data: partner } = await supabase
+            .from("partners")
+            .select("user_id, company_name")
+            .eq("partner_id", post.partner_id)
+            .single();
+
+          if (partner && partner.user_id) {
+            const ambassadorName = `${ambassador.first_name || ""} ${
+              ambassador.last_name || ""
+            }`.trim() || "An ambassador";
+            await createNotification(
+              partner.user_id,
+              "partner",
+              "application_received",
+              "🎯 New Application Received",
+              `${ambassadorName} has applied to your opportunity "${postTitle || post.title}"`,
+              `/applications.html`,
+              applicationId
+            );
+            console.log("   ✅ Partner notification sent");
+          }
+        }
+      } catch (partnerNotifError) {
+        console.error("   ⚠️ Failed to notify partner:", partnerNotifError.message);
+      }
+
       console.log("\n🎉 ========== SUCCESS ==========\n");
 
       return res.json({
@@ -972,6 +1001,350 @@ app.post(
           process.env.NODE_ENV === "development"
             ? error.message
             : "Internal server error",
+      });
+    }
+  }
+);
+
+// ============================================
+// QUICK APPLY - One-click application using stored profile data
+// ============================================
+app.post(
+  "/api/applications/quick-apply",
+  requireAuth,
+  requireRole("ambassador"),
+  async (req, res) => {
+    console.log("\n🚀 ========== QUICK APPLY START ==========");
+
+    try {
+      const { postId } = req.body;
+      const userId = req.auth.userId;
+
+      console.log("📋 Auth info:", { userId, role: req.auth.role });
+
+      // Validation
+      if (!postId) {
+        return res.status(400).json({
+          success: false,
+          error: "Post ID is required",
+        });
+      }
+
+      // Get ambassador profile with all relevant data
+      console.log("🔍 Looking up ambassador profile for user_id:", userId);
+      let { data: ambassador, error: ambassadorError } = await supabase
+        .from("ambassadors")
+        .select("ambassador_id, first_name, last_name, email, user_id, professional_headline, professional_summary, cv_filename")
+        .eq("user_id", userId)
+        .single();
+
+      // If not found by user_id, try alternative lookup methods
+      if (ambassadorError || !ambassador) {
+        console.log("⚠️ Ambassador not found by user_id, trying alternative lookups...");
+        console.log("   Supabase error:", ambassadorError);
+        
+        // FALLBACK 1: Try looking up ambassador directly by ambassador_id 
+        // (in case session has old ambassador_id instead of user_id)
+        console.log("🔍 Trying ambassador_id lookup (legacy):", userId);
+        const { data: ambById, error: ambIdError } = await supabase
+          .from("ambassadors")
+          .select("ambassador_id, first_name, last_name, email, user_id, professional_headline, professional_summary, cv_filename")
+          .eq("ambassador_id", userId)
+          .single();
+
+        if (ambById && !ambIdError) {
+          ambassador = ambById;
+          console.log("✅ Found ambassador by ambassador_id (legacy session):", ambassador.first_name);
+        } else {
+          console.log("   ambassador_id lookup failed:", ambIdError);
+        }
+        
+        // FALLBACK 2: Try via users table email lookup
+        if (!ambassador) {
+          const { data: userData, error: userError } = await supabase
+            .from("users")
+            .select("email, access_code")
+            .eq("user_id", userId)
+            .single();
+
+          console.log("📋 User data from users table:", userData);
+          console.log("   User lookup error:", userError);
+
+          if (userData && userData.email) {
+            // Try to find ambassador by email
+            console.log("📧 Trying email lookup:", userData.email);
+            
+            const { data: ambByEmail, error: emailError } = await supabase
+              .from("ambassadors")
+              .select("ambassador_id, first_name, last_name, email, user_id, professional_headline, professional_summary, cv_filename")
+              .eq("email", userData.email)
+              .single();
+
+            if (ambByEmail && !emailError) {
+              ambassador = ambByEmail;
+              console.log("✅ Found ambassador by email:", ambassador.first_name);
+              
+              // Update the ambassador record with the correct user_id for future lookups
+              if (!ambByEmail.user_id || ambByEmail.user_id !== userId) {
+                await supabase
+                  .from("ambassadors")
+                  .update({ user_id: userId })
+                  .eq("ambassador_id", ambByEmail.ambassador_id);
+                console.log("🔧 Updated ambassador with user_id");
+              }
+            } else {
+              console.log("   Email lookup failed:", emailError);
+              
+              // Try case-insensitive email lookup
+              console.log("🔍 Trying case-insensitive email lookup...");
+              
+              const { data: ambByIlikeEmail, error: ilikeError } = await supabase
+                .from("ambassadors")
+                .select("ambassador_id, first_name, last_name, email, user_id, professional_headline, professional_summary, cv_filename")
+                .ilike("email", userData.email)
+                .single();
+
+              if (ambByIlikeEmail && !ilikeError) {
+                ambassador = ambByIlikeEmail;
+                console.log("✅ Found ambassador by case-insensitive email:", ambassador.first_name);
+                
+                // Update the ambassador record with the correct user_id
+                if (!ambByIlikeEmail.user_id || ambByIlikeEmail.user_id !== userId) {
+                  await supabase
+                    .from("ambassadors")
+                    .update({ user_id: userId })
+                    .eq("ambassador_id", ambByIlikeEmail.ambassador_id);
+                  console.log("🔧 Updated ambassador with user_id");
+                }
+              } else {
+                console.log("   Case-insensitive email lookup failed:", ilikeError);
+              }
+            }
+          }
+        }
+      }
+
+      if (!ambassador) {
+        console.error("❌ Ambassador not found by any method");
+        console.error("   user_id searched:", userId);
+        
+        // Log debugging info
+        const { data: allAmbs } = await supabase
+          .from("ambassadors")
+          .select("ambassador_id, email, user_id, first_name")
+          .limit(5);
+        console.log("   Sample ambassadors in DB:", allAmbs);
+        
+        // Log the user info
+        const { data: userInfo } = await supabase
+          .from("users")
+          .select("user_id, email, user_type")
+          .eq("user_id", userId)
+          .single();
+        console.log("   User info from session:", userInfo);
+        
+        return res.status(404).json({
+          success: false,
+          error: "Ambassador profile not found",
+          details: "Your account may not be properly linked. Try logging out and signing in again, or contact support."
+        });
+      }
+
+      console.log("✅ Ambassador found:", ambassador.first_name, ambassador.last_name);
+
+      // Check if ambassador has completed their about-me profile
+      if (!ambassador.professional_headline || !ambassador.professional_summary) {
+        console.log("❌ Ambassador has not completed about-me profile");
+        return res.status(400).json({
+          success: false,
+          error: "Please complete your professional profile first",
+          details: "Go to your About Me page to add your professional headline and summary.",
+          redirect: "/about-me.html"
+        });
+      }
+
+      console.log("✅ About-me profile is complete");
+
+      // Check if post exists and get partner info
+      console.log("🔍 Verifying post...");
+      const { data: post, error: postError } = await supabase
+        .from("posts")
+        .select("post_id, title, partner_id")
+        .eq("post_id", postId)
+        .single();
+
+      if (postError || !post) {
+        console.error("❌ Post not found:", postError);
+        return res.status(404).json({
+          success: false,
+          error: "Opportunity not found",
+        });
+      }
+
+      console.log("✅ Post found:", post.title);
+
+      // Check for existing application
+      console.log("🔍 Checking for duplicate application...");
+      const { data: existingApp } = await supabase
+        .from("applications")
+        .select("application_id")
+        .eq("post_id", postId)
+        .eq("ambassador_id", ambassador.ambassador_id)
+        .single();
+
+      if (existingApp) {
+        console.log("⚠️ Already applied to this opportunity");
+        return res.status(400).json({
+          success: false,
+          error: "You have already applied to this opportunity",
+        });
+      }
+
+      // Try to get a CV filename - either from ambassador profile or from previous application
+      let cvFilename = ambassador.cv_filename;
+      
+      if (!cvFilename) {
+        // Check if they have a previous application with a CV
+        console.log("🔍 Looking for existing CV from previous applications...");
+        const { data: prevApp } = await supabase
+          .from("applications")
+          .select("cv_filename")
+          .eq("ambassador_id", ambassador.ambassador_id)
+          .not("cv_filename", "is", null)
+          .order("applied_at", { ascending: false })
+          .limit(1)
+          .single();
+        
+        if (prevApp && prevApp.cv_filename) {
+          cvFilename = prevApp.cv_filename;
+          console.log("✅ Found CV from previous application:", cvFilename);
+        }
+      }
+
+      // Create application
+      console.log("💾 Creating application...");
+      const applicationId = uuidv4();
+
+      const applicationData = {
+        application_id: applicationId,
+        post_id: postId,
+        ambassador_id: ambassador.ambassador_id,
+        partner_id: post.partner_id,
+        cv_filename: cvFilename || null,
+        status: "pending",
+        applied_at: new Date().toISOString(),
+        subscribe_to_newsletter: false,
+        terms_accepted: true,
+        // Professional info is fetched from ambassadors table when viewing the application
+      };
+
+      console.log("📋 Application data prepared");
+
+      const { data: savedApp, error: dbError } = await supabase
+        .from("applications")
+        .insert([applicationData])
+        .select()
+        .single();
+
+      if (dbError) {
+        console.error("❌ Database error:", dbError);
+        return res.status(500).json({
+          success: false,
+          error: "Failed to save application",
+          details: dbError.message,
+        });
+      }
+
+      console.log("✅ Application saved:", savedApp.application_id);
+
+      // Create notification for ambassador
+      try {
+        await createNotification(
+          userId,
+          "ambassador",
+          "application_submitted",
+          "✅ Application Submitted",
+          `Your application for "${post.title}" has been sent with your profile info.`,
+          `/Partner-Calls.html`,
+          applicationId
+        );
+        console.log("✅ Ambassador notification sent");
+      } catch (notifError) {
+        console.error("⚠️ Notification failed:", notifError.message);
+      }
+
+      // Notify admins
+      try {
+        const { data: admins } = await supabase.from("admins").select("user_id");
+        if (admins && admins.length > 0) {
+          const ambassadorName = `${ambassador.first_name || ""} ${ambassador.last_name || ""}`.trim() || "An ambassador";
+          for (const admin of admins) {
+            await createNotification(
+              admin.user_id,
+              "admin",
+              "application_submitted",
+              "📋 New Application",
+              `${ambassadorName} applied to "${post.title}"`,
+              `/admin-dashboard.html`,
+              applicationId
+            );
+          }
+          console.log("✅ Admin notifications sent");
+        }
+      } catch (adminNotifError) {
+        console.error("⚠️ Failed to notify admins:", adminNotifError.message);
+      }
+
+      // Notify the partner who posted the opportunity
+      try {
+        if (post.partner_id) {
+          // Get partner's user_id from partners table
+          const { data: partner } = await supabase
+            .from("partners")
+            .select("user_id, company_name")
+            .eq("partner_id", post.partner_id)
+            .single();
+
+          if (partner && partner.user_id) {
+            const ambassadorName = `${ambassador.first_name || ""} ${ambassador.last_name || ""}`.trim() || "An ambassador";
+            await createNotification(
+              partner.user_id,
+              "partner",
+              "application_received",
+              "🎯 New Application Received",
+              `${ambassadorName} has applied to your opportunity "${post.title}"`,
+              `/applications.html`,
+              applicationId
+            );
+            console.log("✅ Partner notification sent to:", partner.company_name || partner.user_id);
+          }
+        }
+      } catch (partnerNotifError) {
+        console.error("⚠️ Failed to notify partner:", partnerNotifError.message);
+      }
+
+      console.log("\n🎉 ========== QUICK APPLY SUCCESS ==========\n");
+
+      return res.json({
+        success: true,
+        applicationId: savedApp.application_id,
+        message: "Application submitted successfully! Your profile has been shared with the partner.",
+        ambassadorProfile: {
+          name: `${ambassador.first_name} ${ambassador.last_name}`,
+          headline: ambassador.professional_headline,
+          hasCV: !!cvFilename
+        }
+      });
+
+    } catch (error) {
+      console.error("\n❌ ========== QUICK APPLY ERROR ==========");
+      console.error("Error:", error.message);
+      console.error("Stack:", error.stack);
+
+      return res.status(500).json({
+        success: false,
+        error: "Failed to submit application",
+        details: process.env.NODE_ENV === "development" ? error.message : "Internal server error",
       });
     }
   }
@@ -2082,7 +2455,7 @@ app.get(
       if (application.ambassador_id) {
         const { data: ambassador } = await supabase
           .from("ambassadors")
-          .select("first_name, last_name, email, cv_filename")
+          .select("first_name, last_name, email, cv_filename, professional_headline, professional_summary")
           .eq("ambassador_id", application.ambassador_id)
           .single();
 
@@ -2094,6 +2467,8 @@ app.get(
             name: ambassadorName,
             email: ambassador.email,
             cvFilename: ambassador.cv_filename,
+            professionalHeadline: ambassador.professional_headline,
+            professionalSummary: ambassador.professional_summary,
           };
         }
       }
@@ -5661,6 +6036,8 @@ app.get(
           review_history: reviewHistory, // ✅ Include full review history
           review_count: reviewHistory.length, // ✅ Total reviews count
           pending_feedback_count: pendingFeedback, // ✅ Unaddressed feedback count
+          ambassador_consent_to_publish: article.ambassador_consent_to_publish || false, // ✅ Consent status
+          consent_given_at: article.consent_given_at, // ✅ When consent was given
         };
       });
 

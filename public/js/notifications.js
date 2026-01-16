@@ -387,7 +387,11 @@
       .notification-icon.type-article_published {
         background: linear-gradient(135deg, #10b981 0%, #059669 100%);
       }
-      
+
+      .notification-icon.type-ambassador_consent {
+        background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+      }
+
       .notification-icon.type-article_rejected {
         background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
       }
@@ -744,7 +748,8 @@
       'approved': 'type-ready_to_publish',
       'rejected': 'type-article_rejected',
       'pending': 'type-article_pending',
-      'submitted': 'type-application_submitted'
+      'submitted': 'type-application_submitted',
+      'ambassador_consent': 'type-ambassador_consent'
     };
     return typeClasses[normalizedType] || typeClasses[type] || 'type-default';
   }
@@ -768,7 +773,8 @@
       'approved': 'bx-check-circle',
       'rejected': 'bx-x-circle',
       'pending': 'bx-time-five',
-      'submitted': 'bx-file'
+      'submitted': 'bx-file',
+      'ambassador_consent': 'bx-check-shield'
     };
     return icons[normalizedType] || icons[type] || 'bx-bell';
   }
