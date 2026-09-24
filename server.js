@@ -2954,15 +2954,15 @@ app.get("/admin-signin", (req, res) => {
 // ------------------------
 app.post("/register/ambassador", async (req, res) => {
   try {
-    const { email, access_code, password, name } = req.body || {};
-    console.log("Registration attempt:", { email, access_code, name });
+    const { email, password, name } = req.body || {};
+    console.log("Registration attempt:", { email, name });
 
-    if (!email || !access_code || !password || !name) {
-      return res.status(400).json({ error: "All fields required" });
+    if (!email || !password || !name) {
+      return res.status(400).json({ error: "Name, email, and password are required" });
     }
 
     const emailLower = String(email).toLowerCase().trim();
-    const access_codeUpper = String(access_code).toUpperCase().trim();
+    const access_codeUpper = await generateUniqueCode("T4LA");
 
     // Check if user already exists
     const existingUser = await getUserByEmail(emailLower, "ambassador");
@@ -3346,31 +3346,24 @@ app.post("/register/admin", async (req, res) => {
 // ------------------------
 app.post("/signin", async (req, res) => {
   try {
-    const { email, access_code, password, rememberMe } = req.body || {};
+    const { email, password, rememberMe } = req.body || {};
 
-    console.log("Sign-in attempt:", { email, access_code });
+    console.log("Sign-in attempt:", { email });
 
     // Validation
-    if (!email || !access_code || !password) {
+    if (!email || !password) {
       return res
         .status(400)
-        .json({ error: "Email, access code, and password are required" });
+        .json({ error: "Email and password are required" });
     }
 
     const emailLower = String(email).toLowerCase().trim();
-    const access_codeUpper = String(access_code).toUpperCase().trim();
 
     // ✅ FIXED: Use getUserByEmail which handles the two-table lookup
     const user = await getUserByEmail(emailLower, "ambassador");
 
     if (!user) {
       console.log(`Sign-in failed: User not found - ${emailLower}`);
-      return res.status(401).json({ error: "Invalid credentials" });
-    }
-
-    // Verify access code
-    if (user.access_code !== access_codeUpper) {
-      console.log(`Sign-in failed: Invalid access code - ${emailLower}`);
       return res.status(401).json({ error: "Invalid credentials" });
     }
 

@@ -21,9 +21,7 @@ async function getCurrentUser() {
  * Sign in user
  */
 
-async function signIn(email, access_code, password, rememberMe = false) {
-  console.log('Our credentials are...', email, access_code, password, rememberMe);
-  
+async function signIn(email, password, rememberMe = false) {
   try {
     const response = await fetch('/signin', {
       method: 'POST',
@@ -33,7 +31,6 @@ async function signIn(email, access_code, password, rememberMe = false) {
       credentials: 'include',
       body: JSON.stringify({
         email,
-        access_code: access_code,
         password,
         rememberMe
       })
@@ -67,12 +64,11 @@ document.addEventListener('DOMContentLoaded', function() {
       e.preventDefault();
       
       const email = document.getElementById('email').value;
-      const access_code = document.getElementById('access_code').value;
       const password = document.getElementById('password').value;
       const rememberMe = document.getElementById('rememberMe').checked;
       
       try {
-        await signIn(email, access_code, password, rememberMe);
+        await signIn(email, password, rememberMe);
       } catch (error) {
         // Error already handled in signIn function
         console.error('Form submission error:', error);
@@ -89,11 +85,10 @@ document.addEventListener('DOMContentLoaded', function() {
     e.preventDefault();  // Prevent default form submission
     
     const email = document.getElementById('email').value;
-    const access_code = document.getElementById('access_code').value;
     const password = document.getElementById('password').value;
-    const rememberMe = document.getElementById('rememberMe').checked;
+    const rememberMe = document.getElementById('rememberMe')?.checked;
     
-    await signIn(email, access_code, password, rememberMe);
+    await signIn(email, password, rememberMe);
   });
 }
 
